@@ -1,969 +1,580 @@
-// Dashboard Handler
-class Dashboard {
-    constructor() {
-        this.currentSection = 'overview';
-        this.userData = this.getUserData();
-        this.init();
-    }
+// Dashboard JavaScript for Cliqpat
 
-    init() {
-        this.setupNavigation();
-        this.loadDashboardData();
-        this.setupEventListeners();
-        this.showSection(this.currentSection);
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    initializeDashboard();
+});
 
-    setupNavigation() {
-        const navLinks = document.querySelectorAll('.sidebar-nav a');
-        navLinks.forEach(link => {
-            link.addEventListener('click', (e) => {
-                e.preventDefault();
-                const section = link.getAttribute('data-section');
-                this.showSection(section);
-                this.updateActiveNav(link);
-            });
+function initializeDashboard() {
+    checkAuthentication();
+    setupDashboardNavigation();
+    setupDashboardFunctions();
+    loadDashboardData();
+}
+
+// Check authentication
+function checkAuthentication() {
+    const userData = localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user');
+    
+    if (!userData) {
+        window.location.href = 'index.html';
+        return;
+    }
+    
+    const user = JSON.parse(userData);
+    
+    // Update user info in UI
+    updateUserInfo(user);
+    
+    // Check if user is on the right dashboard
+    const currentPage = window.location.pathname;
+    if (user.type === 'patient' && !currentPage.includes('patient-dashboard')) {
+        window.location.href = 'patient-dashboard.html';
+    } else if (user.type === 'doctor' && !currentPage.includes('doctor-dashboard')) {
+        window.location.href = 'doctor-dashboard.html';
+    }
+}
+
+// Update user info in UI
+function updateUserInfo(user) {
+    const userNameElements = document.querySelectorAll('.user-name');
+    const userAvatarElements = document.querySelectorAll('.user-avatar');
+    
+    userNameElements.forEach(element => {
+        element.textContent = user.type === 'doctor' ? user.fullName || `Dr. ${user.firstName} ${user.lastName}` : user.fullName || `${user.firstName} ${user.lastName}`;
+    });
+    
+    // Update avatar if available
+    if (user.avatar) {
+        userAvatarElements.forEach(element => {
+            element.src = user.avatar;
         });
     }
+}
 
-    setupEventListeners() {
-        // Search functionality
-        const searchInput = document.querySelector('.search-input');
-        if (searchInput) {
-            searchInput.addEventListener('input', this.debounce((e) => {
-                this.handleSearch(e.target.value);
-            }, 300));
-        }
-
-        // Quick action buttons
-        const quickActions = document.querySelectorAll('.quick-action');
-        quickActions.forEach(action => {
-            action.addEventListener('click', (e) => {
-                const actionType = action.getAttribute('data-action');
-                this.handleQuickAction(actionType);
-            });
+// Setup dashboard navigation
+function setupDashboardNavigation() {
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    const dashboardSections = document.querySelectorAll('.dashboard-section');
+    
+    sidebarLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const targetId = this.getAttribute('href').substring(1);
+            showSection(targetId);
+            
+            // Update active state
+            sidebarLinks.forEach(l => l.parentElement.classList.remove('active'));
+            this.parentElement.classList.add('active');
         });
+    });
+}
 
-        // Clinic cards
-        const clinicCards = document.querySelectorAll('.clinic-card');
-        clinicCards.forEach(card => {
-            card.addEventListener('click', () => {
-                const clinicId = card.getAttribute('data-clinic-id');
-                this.showClinicDetails(clinicId);
-            });
+// Show dashboard section
+function showSection(sectionId) {
+    const sections = document.querySelectorAll('.dashboard-section');
+    const targetSection = document.getElementById(sectionId);
+    
+    if (targetSection) {
+        sections.forEach(section => {
+            section.classList.remove('active');
         });
-
-        // Appointment actions
-        const appointmentActions = document.querySelectorAll('.appointment-action');
-        appointmentActions.forEach(action => {
-            action.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const actionType = action.getAttribute('data-action');
-                const appointmentId = action.closest('.appointment-item').getAttribute('data-appointment-id');
-                this.handleAppointmentAction(actionType, appointmentId);
-            });
-        });
-
-        // File upload
-        const fileUploads = document.querySelectorAll('.file-upload');
-        fileUploads.forEach(upload => {
-            upload.addEventListener('change', (e) => {
-                this.handleFileUpload(e);
-            });
-        });
-
-        // AI Screening
-        const screeningBtn = document.querySelector('.schedule-screening');
-        if (screeningBtn) {
-            screeningBtn.addEventListener('click', () => {
-                this.scheduleAIScreening();
-            });
-        }
-
-        // Logout
-        const logoutBtn = document.querySelector('.logout-btn');
-        if (logoutBtn) {
-            logoutBtn.addEventListener('click', () => {
-                this.logout();
-            });
-        }
-    }
-
-    showSection(section) {
-        this.currentSection = section;
-        const sections = document.querySelectorAll('.dashboard-section');
-        const sectionElement = document.querySelector(`#${section}-section`);
-
-        sections.forEach(s => s.style.display = 'none');
-        if (sectionElement) {
-            sectionElement.style.display = 'block';
-            this.loadSectionData(section);
-        }
-    }
-
-    updateActiveNav(activeLink) {
-        const navLinks = document.querySelectorAll('.sidebar-nav a');
-        navLinks.forEach(link => link.classList.remove('active'));
-        activeLink.classList.add('active');
-    }
-
-    loadDashboardData() {
-        // Load user data and stats
-        this.updateUserInfo();
-        this.loadStats();
-    }
-
-    loadSectionData(section) {
-        switch (section) {
-            case 'overview':
-                this.loadOverviewData();
-                break;
-            case 'clinics':
-                this.loadClinicsData();
-                break;
-            case 'appointments':
-                this.loadAppointmentsData();
-                break;
-            case 'records':
-                this.loadHealthRecordsData();
-                break;
-            case 'screening':
-                this.loadAIScreeningData();
-                break;
-            case 'reports':
-                this.loadReportsData();
-                break;
-            case 'profile':
-                this.loadProfileData();
-                break;
-            case 'patients':
-                this.loadPatientsData();
-                break;
-            case 'ai-reports':
-                this.loadAIReportsData();
-                break;
-            case 'ehr':
-                this.loadEHRData();
-                break;
-            case 'analytics':
-                this.loadAnalyticsData();
-                break;
-        }
-    }
-
-    loadOverviewData() {
-        // Load overview statistics and recent activity
-        this.updateStats();
-        this.loadRecentActivity();
-    }
-
-    loadClinicsData() {
-        const clinicsContainer = document.querySelector('#clinics-section .clinics-grid');
-        if (!clinicsContainer) return;
-
-        const clinics = this.getMockClinics();
-        clinicsContainer.innerHTML = '';
-
-        clinics.forEach(clinic => {
-            const clinicCard = this.createClinicCard(clinic);
-            clinicsContainer.appendChild(clinicCard);
-        });
-    }
-
-    loadAppointmentsData() {
-        const appointmentsContainer = document.querySelector('#appointments-section .appointments-list');
-        if (!appointmentsContainer) return;
-
-        const appointments = this.getMockAppointments();
-        appointmentsContainer.innerHTML = '';
-
-        appointments.forEach(appointment => {
-            const appointmentItem = this.createAppointmentItem(appointment);
-            appointmentsContainer.appendChild(appointmentItem);
-        });
-    }
-
-    loadHealthRecordsData() {
-        const recordsContainer = document.querySelector('#records-section .records-list');
-        if (!recordsContainer) return;
-
-        const records = this.getMockHealthRecords();
-        recordsContainer.innerHTML = '';
-
-        records.forEach(record => {
-            const recordItem = this.createHealthRecordItem(record);
-            recordsContainer.appendChild(recordItem);
-        });
-    }
-
-    loadAIScreeningData() {
-        const screeningContainer = document.querySelector('#screening-section .screening-status');
-        if (!screeningContainer) return;
-
-        const screeningData = this.getMockScreeningData();
-        screeningContainer.innerHTML = this.createScreeningStatusHTML(screeningData);
-    }
-
-    loadReportsData() {
-        const reportsContainer = document.querySelector('#reports-section .reports-grid');
-        if (!reportsContainer) return;
-
-        const reports = this.getMockReports();
-        reportsContainer.innerHTML = '';
-
-        reports.forEach(report => {
-            const reportCard = this.createReportCard(report);
-            reportsContainer.appendChild(reportCard);
-        });
-    }
-
-    loadProfileData() {
-        const profileForm = document.querySelector('#profile-section .profile-form');
-        if (!profileForm) return;
-
-        // Populate form with user data
-        const fields = profileForm.querySelectorAll('input, select, textarea');
-        fields.forEach(field => {
-            if (this.userData[field.name]) {
-                field.value = this.userData[field.name];
-            }
-        });
-    }
-
-    loadPatientsData() {
-        const patientsContainer = document.querySelector('#patients-section .patients-list');
-        if (!patientsContainer) return;
-
-        const patients = this.getMockPatients();
-        patientsContainer.innerHTML = '';
-
-        patients.forEach(patient => {
-            const patientItem = this.createPatientItem(patient);
-            patientsContainer.appendChild(patientItem);
-        });
-    }
-
-    loadAIReportsData() {
-        const reportsContainer = document.querySelector('#ai-reports-section .ai-reports-list');
-        if (!reportsContainer) return;
-
-        const reports = this.getMockAIReports();
-        reportsContainer.innerHTML = '';
-
-        reports.forEach(report => {
-            const reportItem = this.createAIReportItem(report);
-            reportsContainer.appendChild(reportItem);
-        });
-    }
-
-    loadEHRData() {
-        const ehrContainer = document.querySelector('#ehr-section .ehr-list');
-        if (!ehrContainer) return;
-
-        const ehrRecords = this.getMockEHRRecords();
-        ehrContainer.innerHTML = '';
-
-        ehrRecords.forEach(record => {
-            const ehrItem = this.createEHRItem(record);
-            ehrContainer.appendChild(ehrItem);
-        });
-    }
-
-    loadAnalyticsData() {
-        const analyticsContainer = document.querySelector('#analytics-section .analytics-content');
-        if (!analyticsContainer) return;
-
-        const analyticsData = this.getMockAnalyticsData();
-        analyticsContainer.innerHTML = this.createAnalyticsHTML(analyticsData);
-    }
-
-    // Mock Data Methods
-    getUserData() {
-        const isPatient = window.location.pathname.includes('patient');
-        return {
-            name: isPatient ? 'John Doe' : 'Dr. Sarah Johnson',
-            email: isPatient ? 'john.doe@email.com' : 'dr.sarah@clinic.com',
-            phone: '+91 98765 43210',
-            type: isPatient ? 'patient' : 'doctor',
-            avatar: isPatient ? '👤' : '👩‍⚕️'
-        };
-    }
-
-    getMockClinics() {
-        return [
-            {
-                id: 1,
-                name: 'City Medical Center',
-                doctor: 'Dr. Sarah Johnson',
-                specialization: 'General Medicine',
-                rating: 4.8,
-                distance: '2.5 km',
-                consultationFee: '₹500',
-                availableSlots: 5,
-                image: '🏥'
-            },
-            {
-                id: 2,
-                name: 'Health First Clinic',
-                doctor: 'Dr. Michael Chen',
-                specialization: 'Cardiology',
-                rating: 4.6,
-                distance: '3.2 km',
-                consultationFee: '₹800',
-                availableSlots: 3,
-                image: '💊'
-            },
-            {
-                id: 3,
-                name: 'Family Care Clinic',
-                doctor: 'Dr. Emily Brown',
-                specialization: 'Pediatrics',
-                rating: 4.9,
-                distance: '1.8 km',
-                consultationFee: '₹400',
-                availableSlots: 8,
-                image: '👨‍👩‍👧‍👦'
-            }
-        ];
-    }
-
-    getMockAppointments() {
-        return [
-            {
-                id: 1,
-                clinic: 'City Medical Center',
-                doctor: 'Dr. Sarah Johnson',
-                date: '2024-01-15',
-                time: '10:00 AM',
-                status: 'confirmed',
-                type: 'General Checkup'
-            },
-            {
-                id: 2,
-                clinic: 'Health First Clinic',
-                doctor: 'Dr. Michael Chen',
-                date: '2024-01-18',
-                time: '2:30 PM',
-                status: 'pending',
-                type: 'Cardiac Consultation'
-            }
-        ];
-    }
-
-    getMockHealthRecords() {
-        return [
-            {
-                id: 1,
-                title: 'Blood Test Report',
-                date: '2024-01-10',
-                type: 'PDF',
-                size: '2.3 MB',
-                uploaded: true
-            },
-            {
-                id: 2,
-                title: 'X-Ray Report',
-                date: '2024-01-08',
-                type: 'PDF',
-                size: '1.8 MB',
-                uploaded: true
-            }
-        ];
-    }
-
-    getMockScreeningData() {
-        return {
-            status: 'scheduled',
-            scheduledDate: '2024-01-16',
-            scheduledTime: '11:00 AM',
-            duration: '2-3 minutes',
-            questions: 15
-        };
-    }
-
-    getMockReports() {
-        return [
-            {
-                id: 1,
-                title: 'AI Screening Report',
-                date: '2024-01-14',
-                status: 'completed',
-                summary: 'Patient shows symptoms of common cold'
-            },
-            {
-                id: 2,
-                title: 'Health Assessment',
-                date: '2024-01-12',
-                status: 'completed',
-                summary: 'Overall health is good, minor concerns noted'
-            }
-        ];
-    }
-
-    getMockPatients() {
-        return [
-            {
-                id: 1,
-                name: 'John Doe',
-                age: 35,
-                phone: '+91 98765 43210',
-                lastVisit: '2024-01-10',
-                nextAppointment: '2024-01-15'
-            },
-            {
-                id: 2,
-                name: 'Jane Smith',
-                age: 28,
-                phone: '+91 98765 43211',
-                lastVisit: '2024-01-08',
-                nextAppointment: '2024-01-18'
-            }
-        ];
-    }
-
-    getMockAIReports() {
-        return [
-            {
-                id: 1,
-                patient: 'John Doe',
-                date: '2024-01-14',
-                duration: '2:30',
-                symptoms: 'Fever, cough, fatigue',
-                recommendations: 'Rest, fluids, monitor temperature'
-            },
-            {
-                id: 2,
-                patient: 'Jane Smith',
-                date: '2024-01-12',
-                duration: '2:15',
-                symptoms: 'Headache, nausea',
-                recommendations: 'Avoid bright lights, stay hydrated'
-            }
-        ];
-    }
-
-    getMockEHRRecords() {
-        return [
-            {
-                id: 1,
-                patient: 'John Doe',
-                recordType: 'Medical History',
-                date: '2024-01-10',
-                status: 'uploaded',
-                size: '1.2 MB'
-            },
-            {
-                id: 2,
-                patient: 'Jane Smith',
-                recordType: 'Lab Reports',
-                date: '2024-01-08',
-                status: 'uploaded',
-                size: '2.1 MB'
-            }
-        ];
-    }
-
-    getMockAnalyticsData() {
-        return {
-            totalPatients: 150,
-            totalAppointments: 45,
-            averageConsultationTime: '12 minutes',
-            patientSatisfaction: '4.8/5',
-            monthlyGrowth: '+15%'
-        };
-    }
-
-    // UI Creation Methods
-    createClinicCard(clinic) {
-        const card = document.createElement('div');
-        card.className = 'clinic-card';
-        card.setAttribute('data-clinic-id', clinic.id);
         
-        card.innerHTML = `
-            <div class="clinic-image">${clinic.image}</div>
-            <div class="clinic-info">
-                <h3>${clinic.name}</h3>
-                <p class="doctor-name">${clinic.doctor}</p>
-                <p class="specialization">${clinic.specialization}</p>
-                <div class="clinic-meta">
-                    <span class="rating">⭐ ${clinic.rating}</span>
-                    <span class="distance">📍 ${clinic.distance}</span>
+        targetSection.classList.add('active');
+        
+        // Load section-specific data
+        loadSectionData(sectionId);
+    }
+}
+
+// Load section-specific data
+function loadSectionData(sectionId) {
+    switch (sectionId) {
+        case 'clinics':
+            loadClinicsData();
+            break;
+        case 'appointments':
+            loadAppointmentsData();
+            break;
+        case 'patients':
+            loadPatientsData();
+            break;
+        case 'ai-reports':
+            loadAIReportsData();
+            break;
+        case 'ehr':
+            loadEHRData();
+            break;
+        case 'analytics':
+            loadAnalyticsData();
+            break;
+    }
+}
+
+// Setup dashboard functions
+function setupDashboardFunctions() {
+    // Setup logout
+    const logoutButtons = document.querySelectorAll('a[href="index.html"]');
+    logoutButtons.forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            logout();
+        });
+    });
+    
+    // Setup user menu
+    const menuToggles = document.querySelectorAll('.menu-toggle');
+    menuToggles.forEach(toggle => {
+        toggle.addEventListener('click', function() {
+            const dropdown = this.nextElementSibling;
+            dropdown.classList.toggle('active');
+        });
+    });
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.user-menu')) {
+            const dropdowns = document.querySelectorAll('.dropdown-menu');
+            dropdowns.forEach(dropdown => {
+                dropdown.classList.remove('active');
+            });
+        }
+    });
+}
+
+// Load dashboard data
+function loadDashboardData() {
+    const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+    
+    if (userData.type === 'patient') {
+        loadPatientDashboardData();
+    } else {
+        loadDoctorDashboardData();
+    }
+}
+
+// Load patient dashboard data
+async function loadPatientDashboardData() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        
+        // Load appointments
+        const appointmentsResponse = await fetch('/api/appointments/patient', {
+            headers: {
+                'Authorization': `Bearer ${userData.token}`
+            }
+        });
+        
+        if (appointmentsResponse.ok) {
+            const appointmentsData = await appointmentsResponse.json();
+            updatePatientAppointments(appointmentsData.data.appointments);
+        }
+        
+        // Load medical records
+        const recordsResponse = await fetch('/api/patients/medical-records', {
+            headers: {
+                'Authorization': `Bearer ${userData.token}`
+            }
+        });
+        
+        if (recordsResponse.ok) {
+            const recordsData = await recordsResponse.json();
+            updateMedicalRecords(recordsData.data.records);
+        }
+        
+    } catch (error) {
+        console.error('Error loading patient dashboard data:', error);
+    }
+}
+
+// Load doctor dashboard data
+async function loadDoctorDashboardData() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        
+        // Load appointments
+        const appointmentsResponse = await fetch('/api/appointments/doctor', {
+            headers: {
+                'Authorization': `Bearer ${userData.token}`
+            }
+        });
+        
+        if (appointmentsResponse.ok) {
+            const appointmentsData = await appointmentsResponse.json();
+            updateDoctorAppointments(appointmentsData.data.appointments);
+        }
+        
+    } catch (error) {
+        console.error('Error loading doctor dashboard data:', error);
+    }
+}
+
+// Update patient appointments
+function updatePatientAppointments(appointments) {
+    const upcomingContainer = document.getElementById('upcomingAppointments');
+    const pastContainer = document.getElementById('pastAppointments');
+    
+    if (!upcomingContainer || !pastContainer) return;
+    
+    const upcoming = appointments.filter(apt => apt.status === 'confirmed' || apt.status === 'scheduled');
+    const past = appointments.filter(apt => apt.status === 'completed' || apt.status === 'cancelled');
+    
+    // Update upcoming appointments
+    if (upcoming.length > 0) {
+        upcomingContainer.innerHTML = upcoming.map(appointment => `
+            <div class="appointment-card">
+                <div class="appointment-header">
+                    <div class="doctor-info">
+                        <img src="images/doctor1.jpg" alt="Doctor" class="doctor-avatar">
+                        <div>
+                            <h3>${appointment.doctor.firstName} ${appointment.doctor.lastName}</h3>
+                            <p>${appointment.doctor.specialization} • ${appointment.doctor.clinicName}</p>
+                        </div>
+                    </div>
+                    <div class="appointment-status ${appointment.status}">
+                        <i class="fas fa-check-circle"></i>
+                        ${appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                    </div>
                 </div>
-                <div class="clinic-footer">
-                    <span class="fee">${clinic.consultationFee}</span>
-                    <span class="slots">${clinic.availableSlots} slots available</span>
+                <div class="appointment-details">
+                    <div class="detail-item">
+                        <i class="fas fa-calendar"></i>
+                        <span>${new Date(appointment.appointmentDate).toLocaleDateString()}, ${appointment.appointmentTime}</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-rupee-sign"></i>
+                        <span>₹${appointment.consultationFee} Consultation Fee</span>
+                    </div>
                 </div>
-            </div>
-            <div class="clinic-actions">
-                <button class="btn btn-primary" onclick="dashboard.bookAppointment(${clinic.id})">
-                    Book Appointment
-                </button>
-                <button class="btn btn-secondary" onclick="dashboard.viewClinicDetails(${clinic.id})">
-                    View Details
-                </button>
-            </div>
-        `;
-        
-        return card;
-    }
-
-    createAppointmentItem(appointment) {
-        const item = document.createElement('div');
-        item.className = 'appointment-item';
-        item.setAttribute('data-appointment-id', appointment.id);
-        
-        item.innerHTML = `
-            <div class="appointment-info">
-                <h4>${appointment.clinic}</h4>
-                <p class="doctor">${appointment.doctor}</p>
-                <p class="datetime">${appointment.date} at ${appointment.time}</p>
-                <p class="type">${appointment.type}</p>
-            </div>
-            <div class="appointment-status ${appointment.status}">
-                <span class="status-badge">${appointment.status}</span>
-            </div>
-            <div class="appointment-actions">
-                <button class="btn btn-sm btn-primary appointment-action" data-action="reschedule">
-                    Reschedule
-                </button>
-                <button class="btn btn-sm btn-secondary appointment-action" data-action="cancel">
-                    Cancel
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    createHealthRecordItem(record) {
-        const item = document.createElement('div');
-        item.className = 'record-item';
-        
-        item.innerHTML = `
-            <div class="record-info">
-                <h4>${record.title}</h4>
-                <p class="date">${record.date}</p>
-                <p class="type">${record.type} • ${record.size}</p>
-            </div>
-            <div class="record-actions">
-                <button class="btn btn-sm btn-primary" onclick="dashboard.viewRecord(${record.id})">
-                    View
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="dashboard.downloadRecord(${record.id})">
-                    Download
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    createScreeningStatusHTML(data) {
-        return `
-            <div class="screening-card">
-                <div class="screening-header">
-                    <h3>AI Screening Status</h3>
-                    <span class="status-badge ${data.status}">${data.status}</span>
-                </div>
-                <div class="screening-details">
-                    <p><strong>Scheduled:</strong> ${data.scheduledDate} at ${data.scheduledTime}</p>
-                    <p><strong>Duration:</strong> ${data.duration}</p>
-                    <p><strong>Questions:</strong> ${data.questions}</p>
-                </div>
-                <div class="screening-actions">
-                    <button class="btn btn-primary" onclick="dashboard.rescheduleScreening()">
+                <div class="appointment-actions">
+                    <button class="btn btn-outline" onclick="rescheduleAppointment('${appointment._id}')">
+                        <i class="fas fa-calendar-alt"></i>
                         Reschedule
                     </button>
-                    <button class="btn btn-secondary" onclick="dashboard.viewScreeningDetails()">
+                    <button class="btn btn-outline" onclick="cancelAppointment('${appointment._id}')">
+                        <i class="fas fa-times"></i>
+                        Cancel
+                    </button>
+                    <button class="btn btn-primary" onclick="viewAppointmentDetails('${appointment._id}')">
+                        <i class="fas fa-eye"></i>
                         View Details
                     </button>
                 </div>
             </div>
-        `;
+        `).join('');
+    } else {
+        upcomingContainer.innerHTML = '<p class="no-data">No upcoming appointments</p>';
     }
-
-    createReportCard(report) {
-        const card = document.createElement('div');
-        card.className = 'report-card';
-        
-        card.innerHTML = `
-            <div class="report-header">
-                <h4>${report.title}</h4>
-                <span class="date">${report.date}</span>
-            </div>
-            <div class="report-content">
-                <p class="summary">${report.summary}</p>
-                <span class="status-badge ${report.status}">${report.status}</span>
-            </div>
-            <div class="report-actions">
-                <button class="btn btn-sm btn-primary" onclick="dashboard.viewReport(${report.id})">
-                    View Full Report
-                </button>
-            </div>
-        `;
-        
-        return card;
-    }
-
-    createPatientItem(patient) {
-        const item = document.createElement('div');
-        item.className = 'patient-item';
-        
-        item.innerHTML = `
-            <div class="patient-info">
-                <h4>${patient.name}</h4>
-                <p class="age">Age: ${patient.age}</p>
-                <p class="phone">${patient.phone}</p>
-            </div>
-            <div class="patient-visits">
-                <p><strong>Last Visit:</strong> ${patient.lastVisit}</p>
-                <p><strong>Next Appointment:</strong> ${patient.nextAppointment}</p>
-            </div>
-            <div class="patient-actions">
-                <button class="btn btn-sm btn-primary" onclick="dashboard.viewPatientDetails(${patient.id})">
-                    View Details
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="dashboard.viewPatientEHR(${patient.id})">
-                    View EHR
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    createAIReportItem(report) {
-        const item = document.createElement('div');
-        item.className = 'ai-report-item';
-        
-        item.innerHTML = `
-            <div class="report-header">
-                <h4>${report.patient}</h4>
-                <span class="date">${report.date}</span>
-            </div>
-            <div class="report-details">
-                <p><strong>Duration:</strong> ${report.duration} minutes</p>
-                <p><strong>Symptoms:</strong> ${report.symptoms}</p>
-                <p><strong>Recommendations:</strong> ${report.recommendations}</p>
-            </div>
-            <div class="report-actions">
-                <button class="btn btn-sm btn-primary" onclick="dashboard.viewAIReport(${report.id})">
-                    View Full Report
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    createEHRItem(record) {
-        const item = document.createElement('div');
-        item.className = 'ehr-item';
-        
-        item.innerHTML = `
-            <div class="ehr-info">
-                <h4>${record.patient}</h4>
-                <p class="record-type">${record.recordType}</p>
-                <p class="date">${record.date}</p>
-            </div>
-            <div class="ehr-meta">
-                <span class="status-badge ${record.status}">${record.status}</span>
-                <span class="size">${record.size}</span>
-            </div>
-            <div class="ehr-actions">
-                <button class="btn btn-sm btn-primary" onclick="dashboard.viewEHR(${record.id})">
-                    View
-                </button>
-                <button class="btn btn-sm btn-secondary" onclick="dashboard.downloadEHR(${record.id})">
-                    Download
-                </button>
-            </div>
-        `;
-        
-        return item;
-    }
-
-    createAnalyticsHTML(data) {
-        return `
-            <div class="analytics-grid">
-                <div class="analytics-card">
-                    <h3>Total Patients</h3>
-                    <p class="number">${data.totalPatients}</p>
+    
+    // Update past appointments
+    if (past.length > 0) {
+        pastContainer.innerHTML = past.map(appointment => `
+            <div class="appointment-card past">
+                <div class="appointment-header">
+                    <div class="doctor-info">
+                        <img src="images/doctor2.jpg" alt="Doctor" class="doctor-avatar">
+                        <div>
+                            <h3>${appointment.doctor.firstName} ${appointment.doctor.lastName}</h3>
+                            <p>${appointment.doctor.specialization} • ${appointment.doctor.clinicName}</p>
+                        </div>
+                    </div>
+                    <div class="appointment-status ${appointment.status}">
+                        <i class="fas fa-check-circle"></i>
+                        ${appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}
+                    </div>
                 </div>
-                <div class="analytics-card">
-                    <h3>Total Appointments</h3>
-                    <p class="number">${data.totalAppointments}</p>
+                <div class="appointment-details">
+                    <div class="detail-item">
+                        <i class="fas fa-calendar"></i>
+                        <span>${new Date(appointment.appointmentDate).toLocaleDateString()}, ${appointment.appointmentTime}</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-rupee-sign"></i>
+                        <span>₹${appointment.consultationFee} Consultation Fee</span>
+                    </div>
                 </div>
-                <div class="analytics-card">
-                    <h3>Avg. Consultation Time</h3>
-                    <p class="number">${data.averageConsultationTime}</p>
+                <div class="appointment-actions">
+                    <button class="btn btn-outline" onclick="viewPrescription('${appointment._id}')">
+                        <i class="fas fa-prescription"></i>
+                        View Prescription
+                    </button>
+                    <button class="btn btn-primary" onclick="bookFollowUp('${appointment._id}')">
+                        <i class="fas fa-calendar-plus"></i>
+                        Book Follow-up
+                    </button>
                 </div>
-                <div class="analytics-card">
-                    <h3>Patient Satisfaction</h3>
-                    <p class="number">${data.patientSatisfaction}</p>
-                </div>
-                <div class="analytics-card">
-                    <h3>Monthly Growth</h3>
-                    <p class="number positive">${data.monthlyGrowth}</p>
-                </div>
-            </div>
-        `;
-    }
-
-    // Action Handlers
-    handleSearch(query) {
-        // Implement search functionality based on current section
-        console.log('Searching for:', query);
-        this.showNotification(`Searching for: ${query}`, 'info');
-    }
-
-    handleQuickAction(actionType) {
-        switch (actionType) {
-            case 'find-clinic':
-                this.showSection('clinics');
-                break;
-            case 'book-appointment':
-                this.showSection('appointments');
-                break;
-            case 'upload-records':
-                this.showSection('records');
-                break;
-            case 'schedule-screening':
-                this.scheduleAIScreening();
-                break;
-            case 'view-reports':
-                this.showSection('reports');
-                break;
-            case 'manage-patients':
-                this.showSection('patients');
-                break;
-            case 'view-ehr':
-                this.showSection('ehr');
-                break;
-        }
-    }
-
-    handleAppointmentAction(actionType, appointmentId) {
-        switch (actionType) {
-            case 'reschedule':
-                this.rescheduleAppointment(appointmentId);
-                break;
-            case 'cancel':
-                this.cancelAppointment(appointmentId);
-                break;
-        }
-    }
-
-    handleFileUpload(event) {
-        const file = event.target.files[0];
-        if (file) {
-            this.uploadFile(file);
-        }
-    }
-
-    // Specific Action Methods
-    bookAppointment(clinicId) {
-        this.showNotification('Redirecting to appointment booking...', 'info');
-        setTimeout(() => {
-            // Simulate navigation to booking page
-            this.showNotification('Appointment booking feature will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewClinicDetails(clinicId) {
-        this.showNotification('Loading clinic details...', 'info');
-        setTimeout(() => {
-            this.showNotification('Clinic details feature will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    rescheduleAppointment(appointmentId) {
-        this.showNotification('Opening reschedule form...', 'info');
-        setTimeout(() => {
-            this.showNotification('Reschedule feature will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    cancelAppointment(appointmentId) {
-        if (confirm('Are you sure you want to cancel this appointment?')) {
-            this.showNotification('Cancelling appointment...', 'info');
-            setTimeout(() => {
-                this.showNotification('Appointment cancelled successfully!', 'success');
-            }, 1000);
-        }
-    }
-
-    viewRecord(recordId) {
-        this.showNotification('Opening health record...', 'info');
-        setTimeout(() => {
-            this.showNotification('Health record viewer will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    downloadRecord(recordId) {
-        this.showNotification('Downloading record...', 'info');
-        setTimeout(() => {
-            this.showNotification('Record downloaded successfully!', 'success');
-        }, 2000);
-    }
-
-    scheduleAIScreening() {
-        this.showNotification('Scheduling AI screening call...', 'info');
-        setTimeout(() => {
-            this.showNotification('AI screening scheduled successfully!', 'success');
-        }, 2000);
-    }
-
-    rescheduleScreening() {
-        this.showNotification('Opening reschedule form...', 'info');
-        setTimeout(() => {
-            this.showNotification('Screening rescheduled successfully!', 'success');
-        }, 1000);
-    }
-
-    viewScreeningDetails() {
-        this.showNotification('Loading screening details...', 'info');
-        setTimeout(() => {
-            this.showNotification('Screening details feature will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewReport(reportId) {
-        this.showNotification('Opening report...', 'info');
-        setTimeout(() => {
-            this.showNotification('Report viewer will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewPatientDetails(patientId) {
-        this.showNotification('Loading patient details...', 'info');
-        setTimeout(() => {
-            this.showNotification('Patient details feature will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewPatientEHR(patientId) {
-        this.showNotification('Loading patient EHR...', 'info');
-        setTimeout(() => {
-            this.showNotification('Patient EHR viewer will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewAIReport(reportId) {
-        this.showNotification('Opening AI report...', 'info');
-        setTimeout(() => {
-            this.showNotification('AI report viewer will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    viewEHR(recordId) {
-        this.showNotification('Opening EHR record...', 'info');
-        setTimeout(() => {
-            this.showNotification('EHR viewer will be implemented soon!', 'success');
-        }, 1000);
-    }
-
-    downloadEHR(recordId) {
-        this.showNotification('Downloading EHR record...', 'info');
-        setTimeout(() => {
-            this.showNotification('EHR record downloaded successfully!', 'success');
-        }, 2000);
-    }
-
-    uploadFile(file) {
-        this.showNotification('Uploading file...', 'info');
-        setTimeout(() => {
-            this.showNotification('File uploaded successfully!', 'success');
-        }, 2000);
-    }
-
-    logout() {
-        if (confirm('Are you sure you want to logout?')) {
-            this.showNotification('Logging out...', 'info');
-            setTimeout(() => {
-                window.location.href = 'index.html';
-            }, 1000);
-        }
-    }
-
-    // Utility Methods
-    updateUserInfo() {
-        const userName = document.querySelector('.user-name');
-        const userEmail = document.querySelector('.user-email');
-        const userAvatar = document.querySelector('.user-avatar');
-
-        if (userName) userName.textContent = this.userData.name;
-        if (userEmail) userEmail.textContent = this.userData.email;
-        if (userAvatar) userAvatar.textContent = this.userData.avatar;
-    }
-
-    updateStats() {
-        const stats = document.querySelectorAll('.stat-number');
-        stats.forEach(stat => {
-            const target = parseInt(stat.getAttribute('data-target'));
-            this.animateCounter(stat, target);
-        });
-    }
-
-    animateCounter(element, target) {
-        let current = 0;
-        const increment = target / 50;
-        const timer = setInterval(() => {
-            current += increment;
-            if (current >= target) {
-                current = target;
-                clearInterval(timer);
-            }
-            element.textContent = Math.floor(current);
-        }, 20);
-    }
-
-    loadRecentActivity() {
-        const activityContainer = document.querySelector('.recent-activity');
-        if (!activityContainer) return;
-
-        const activities = [
-            { text: 'Appointment booked with Dr. Sarah Johnson', time: '2 hours ago' },
-            { text: 'Health records uploaded', time: '1 day ago' },
-            { text: 'AI screening completed', time: '2 days ago' }
-        ];
-
-        activityContainer.innerHTML = activities.map(activity => `
-            <div class="activity-item">
-                <p>${activity.text}</p>
-                <span class="time">${activity.time}</span>
             </div>
         `).join('');
-    }
-
-    showNotification(message, type = 'info') {
-        if (window.showNotification) {
-            window.showNotification(message, type);
-        } else {
-            alert(message);
-        }
-    }
-
-    debounce(func, wait) {
-        let timeout;
-        return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
-            clearTimeout(timeout);
-            timeout = setTimeout(later, wait);
-        };
+    } else {
+        pastContainer.innerHTML = '<p class="no-data">No past appointments</p>';
     }
 }
 
-// Initialize dashboard when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if we're on a dashboard page
-    if (window.location.pathname.includes('dashboard')) {
-        window.dashboard = new Dashboard();
+// Update doctor appointments
+function updateDoctorAppointments(appointments) {
+    const appointmentsList = document.querySelector('.appointments-list');
+    if (!appointmentsList) return;
+    
+    if (appointments.length > 0) {
+        appointmentsList.innerHTML = appointments.map(appointment => `
+            <div class="appointment-item">
+                <div class="appointment-time">
+                    <span class="time">${appointment.appointmentTime}</span>
+                    <span class="status ${appointment.status}">${appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</span>
+                </div>
+                <div class="appointment-details">
+                    <h4>${appointment.patient.firstName} ${appointment.patient.lastName}</h4>
+                    <p>${appointment.reason}</p>
+                    <div class="appointment-notes">
+                        ${appointment.aiScreening?.isCompleted ? '<span class="ai-report">AI Report Available</span>' : ''}
+                        <span class="ehr">EHR Updated</span>
+                    </div>
+                </div>
+                <div class="appointment-actions">
+                    <button class="btn btn-outline" onclick="rescheduleAppointment('${appointment._id}')">
+                        <i class="fas fa-calendar-alt"></i>
+                        Reschedule
+                    </button>
+                    <button class="btn btn-primary" onclick="startConsultation('${appointment._id}')">
+                        <i class="fas fa-play"></i>
+                        Start
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        appointmentsList.innerHTML = '<p class="no-data">No appointments for today</p>';
     }
-});
+}
 
-// Export for use in other files
-window.Dashboard = Dashboard;
+// Update medical records
+function updateMedicalRecords(records) {
+    const recordsGrid = document.getElementById('recordsGrid');
+    if (!recordsGrid) return;
+    
+    if (records.length > 0) {
+        recordsGrid.innerHTML = records.map(record => `
+            <div class="record-card">
+                <div class="record-icon">
+                    <i class="fas fa-${getRecordIcon(record.type)}"></i>
+                </div>
+                <div class="record-info">
+                    <h4>${record.title}</h4>
+                    <p>${record.description || 'No description available'}</p>
+                    <span class="record-date">${new Date(record.uploadDate).toLocaleDateString()}</span>
+                </div>
+                <div class="record-actions">
+                    <button class="btn btn-outline small" onclick="viewRecord('${record._id}')">
+                        <i class="fas fa-eye"></i>
+                        View
+                    </button>
+                    <button class="btn btn-outline small" onclick="downloadRecord('${record._id}')">
+                        <i class="fas fa-download"></i>
+                        Download
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        recordsGrid.innerHTML = '<p class="no-data">No medical records found</p>';
+    }
+}
+
+// Get record icon based on type
+function getRecordIcon(type) {
+    const iconMap = {
+        'lab_report': 'flask',
+        'prescription': 'prescription-bottle',
+        'imaging': 'x-ray',
+        'vaccination': 'syringe',
+        'other': 'file-medical'
+    };
+    return iconMap[type] || 'file-medical';
+}
+
+// Load clinics data
+async function loadClinicsData() {
+    try {
+        const response = await fetch('/api/doctors/search?limit=20');
+        if (response.ok) {
+            const data = await response.json();
+            updateClinicsGrid(data.data.doctors);
+        }
+    } catch (error) {
+        console.error('Error loading clinics:', error);
+    }
+}
+
+// Update clinics grid
+function updateClinicsGrid(doctors) {
+    const clinicsGrid = document.getElementById('clinicsGrid');
+    if (!clinicsGrid) return;
+    
+    if (doctors.length > 0) {
+        clinicsGrid.innerHTML = doctors.map(doctor => `
+            <div class="clinic-card">
+                <div class="clinic-header">
+                    <div class="clinic-avatar">
+                        <i class="fas fa-stethoscope"></i>
+                    </div>
+                    <div class="clinic-info">
+                        <h3>${doctor.clinicName}</h3>
+                        <p class="doctor-name">${doctor.firstName} ${doctor.lastName}</p>
+                        <p class="specialization">${doctor.specialization}</p>
+                    </div>
+                    <div class="clinic-rating">
+                        <div class="stars">
+                            ${generateStars(doctor.rating?.average || 0)}
+                        </div>
+                        <span class="rating-text">${doctor.rating?.average || 0}/5</span>
+                    </div>
+                </div>
+                <div class="clinic-details">
+                    <div class="detail-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <span>${doctor.clinicAddress.city}, ${doctor.clinicAddress.state}</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-clock"></i>
+                        <span>${doctor.experience} years experience</span>
+                    </div>
+                    <div class="detail-item">
+                        <i class="fas fa-rupee-sign"></i>
+                        <span>₹${doctor.consultationFee} consultation fee</span>
+                    </div>
+                </div>
+                <div class="clinic-actions">
+                    <button class="btn btn-outline" onclick="viewClinicDetails('${doctor._id}')">
+                        <i class="fas fa-eye"></i>
+                        View Details
+                    </button>
+                    <button class="btn btn-primary" onclick="bookAppointment('${doctor._id}')">
+                        <i class="fas fa-calendar-plus"></i>
+                        Book Appointment
+                    </button>
+                </div>
+            </div>
+        `).join('');
+    } else {
+        clinicsGrid.innerHTML = '<p class="no-data">No clinics found</p>';
+    }
+}
+
+// Generate stars for rating
+function generateStars(rating) {
+    const fullStars = Math.floor(rating);
+    const hasHalfStar = rating % 1 !== 0;
+    const emptyStars = 5 - fullStars - (hasHalfStar ? 1 : 0);
+    
+    let stars = '';
+    for (let i = 0; i < fullStars; i++) {
+        stars += '<i class="fas fa-star"></i>';
+    }
+    if (hasHalfStar) {
+        stars += '<i class="fas fa-star-half-alt"></i>';
+    }
+    for (let i = 0; i < emptyStars; i++) {
+        stars += '<i class="fas fa-star-o"></i>';
+    }
+    
+    return stars;
+}
+
+// Load appointments data
+function loadAppointmentsData() {
+    // This will be called when the appointments section is shown
+    // Data is already loaded in loadDashboardData()
+}
+
+// Load patients data
+function loadPatientsData() {
+    // This will be called when the patients section is shown
+    // Data is already loaded in loadDashboardData()
+}
+
+// Load AI reports data
+function loadAIReportsData() {
+    // This will be called when the AI reports section is shown
+}
+
+// Load EHR data
+function loadEHRData() {
+    // This will be called when the EHR section is shown
+}
+
+// Load analytics data
+function loadAnalyticsData() {
+    // This will be called when the analytics section is shown
+}
+
+// Appointment functions
+function rescheduleAppointment(appointmentId) {
+    // Implement reschedule functionality
+    console.log('Reschedule appointment:', appointmentId);
+}
+
+function cancelAppointment(appointmentId) {
+    // Implement cancel functionality
+    console.log('Cancel appointment:', appointmentId);
+}
+
+function viewAppointmentDetails(appointmentId) {
+    // Implement view details functionality
+    console.log('View appointment details:', appointmentId);
+}
+
+function viewPrescription(appointmentId) {
+    // Implement view prescription functionality
+    console.log('View prescription:', appointmentId);
+}
+
+function bookFollowUp(appointmentId) {
+    // Implement follow-up booking functionality
+    console.log('Book follow-up:', appointmentId);
+}
+
+function startConsultation(appointmentId) {
+    // Implement start consultation functionality
+    console.log('Start consultation:', appointmentId);
+}
+
+// Clinic functions
+function viewClinicDetails(doctorId) {
+    // Implement view clinic details functionality
+    console.log('View clinic details:', doctorId);
+}
+
+function bookAppointment(doctorId) {
+    // Implement book appointment functionality
+    console.log('Book appointment:', doctorId);
+}
+
+// Record functions
+function viewRecord(recordId) {
+    // Implement view record functionality
+    console.log('View record:', recordId);
+}
+
+function downloadRecord(recordId) {
+    // Implement download record functionality
+    console.log('Download record:', recordId);
+}
+
+// Logout function
+function logout() {
+    localStorage.removeItem('cliqpat_user');
+    sessionStorage.removeItem('cliqpat_user');
+    window.location.href = 'index.html';
+}
+
+// Export functions for global use
+window.DashboardUtils = {
+    showSection,
+    loadSectionData,
+    rescheduleAppointment,
+    cancelAppointment,
+    viewAppointmentDetails,
+    bookAppointment,
+    logout
+};
 

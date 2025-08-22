@@ -1,434 +1,498 @@
-// Registration Form Handler
-class RegistrationForm {
-    constructor() {
-        this.currentStep = 1;
-        this.totalSteps = 3;
-        this.formData = {};
-        this.init();
-    }
+// Registration JavaScript for Cliqpat
 
-    init() {
-        this.setupEventListeners();
-        this.updateProgressBar();
-        this.setupFileUploads();
-        this.setupPasswordValidation();
-    }
+document.addEventListener('DOMContentLoaded', function() {
+    initializeRegistration();
+});
 
-    setupEventListeners() {
-        // Next/Previous buttons
-        const nextButtons = document.querySelectorAll('.btn-next');
-        const prevButtons = document.querySelectorAll('.btn-prev');
+function initializeRegistration() {
+    setupMultiStepForms();
+    setupFileUploads();
+    setupRegistrationForms();
+}
 
-        nextButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.nextStep();
-            });
-        });
-
-        prevButtons.forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.prevStep();
-            });
-        });
-
-        // Form submission
-        const submitBtn = document.querySelector('.btn-submit');
-        if (submitBtn) {
-            submitBtn.addEventListener('click', (e) => {
-                e.preventDefault();
-                this.submitForm();
-            });
-        }
-
-        // Input validation on blur
-        const inputs = document.querySelectorAll('input, select, textarea');
-        inputs.forEach(input => {
-            input.addEventListener('blur', () => this.validateField(input));
-            input.addEventListener('input', () => this.clearFieldError(input));
-        });
-
-        // File upload validation
-        const fileInputs = document.querySelectorAll('input[type="file"]');
-        fileInputs.forEach(input => {
-            input.addEventListener('change', (e) => this.handleFileUpload(e));
-        });
-    }
-
-    setupFileUploads() {
-        const fileAreas = document.querySelectorAll('.file-upload-area');
+// Multi-step form setup
+function setupMultiStepForms() {
+    const multiStepForms = document.querySelectorAll('.multi-step');
+    
+    multiStepForms.forEach(form => {
+        const steps = form.querySelectorAll('.form-step');
+        const progressSteps = document.querySelectorAll('.progress-step');
         
-        fileAreas.forEach(area => {
-            const input = area.querySelector('input[type="file"]');
-            const preview = area.querySelector('.file-preview');
-            const label = area.querySelector('.file-label');
-
-            if (input && preview && label) {
-                input.addEventListener('change', (e) => {
-                    const file = e.target.files[0];
-                    if (file) {
-                        this.displayFilePreview(file, preview, label);
-                    }
-                });
-
-                // Drag and drop functionality
-                area.addEventListener('dragover', (e) => {
-                    e.preventDefault();
-                    area.classList.add('drag-over');
-                });
-
-                area.addEventListener('dragleave', () => {
-                    area.classList.remove('drag-over');
-                });
-
-                area.addEventListener('drop', (e) => {
-                    e.preventDefault();
-                    area.classList.remove('drag-over');
-                    const file = e.dataTransfer.files[0];
-                    if (file) {
-                        input.files = e.dataTransfer.files;
-                        this.displayFilePreview(file, preview, label);
-                    }
-                });
-            }
-        });
-    }
-
-    displayFilePreview(file, preview, label) {
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
-        
-        if (!allowedTypes.includes(file.type)) {
-            this.showFieldError(input, 'Please upload PDF, JPG, or PNG files only');
-            return;
-        }
-
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            this.showFieldError(input, 'File size should be less than 5MB');
-            return;
-        }
-
-        label.textContent = file.name;
-        preview.innerHTML = '';
-
-        if (file.type.startsWith('image/')) {
-            const img = document.createElement('img');
-            img.src = URL.createObjectURL(file);
-            img.style.maxWidth = '100px';
-            img.style.maxHeight = '100px';
-            preview.appendChild(img);
-        } else {
-            const icon = document.createElement('i');
-            icon.className = 'fas fa-file-pdf';
-            icon.style.fontSize = '2rem';
-            icon.style.color = '#e74c3c';
-            preview.appendChild(icon);
-        }
-
-        preview.style.display = 'block';
-    }
-
-    setupPasswordValidation() {
-        const passwordInput = document.querySelector('input[name="password"]');
-        const confirmPasswordInput = document.querySelector('input[name="confirmPassword"]');
-        const strengthMeter = document.querySelector('.password-strength');
-
-        if (passwordInput && strengthMeter) {
-            passwordInput.addEventListener('input', (e) => {
-                const strength = this.checkPasswordStrength(e.target.value);
-                this.updatePasswordStrength(strength, strengthMeter);
-            });
-        }
-
-        if (confirmPasswordInput && passwordInput) {
-            confirmPasswordInput.addEventListener('input', () => {
-                this.validatePasswordMatch(passwordInput, confirmPasswordInput);
-            });
-        }
-    }
-
-    checkPasswordStrength(password) {
-        let score = 0;
-        
-        if (password.length >= 8) score++;
-        if (/[a-z]/.test(password)) score++;
-        if (/[A-Z]/.test(password)) score++;
-        if (/[0-9]/.test(password)) score++;
-        if (/[^A-Za-z0-9]/.test(password)) score++;
-
-        if (score < 2) return 'weak';
-        if (score < 4) return 'medium';
-        return 'strong';
-    }
-
-    updatePasswordStrength(strength, meter) {
-        meter.className = `password-strength ${strength}`;
-        const text = meter.querySelector('.strength-text');
-        if (text) {
-            text.textContent = `Password Strength: ${strength.charAt(0).toUpperCase() + strength.slice(1)}`;
-        }
-    }
-
-    validatePasswordMatch(passwordInput, confirmInput) {
-        if (passwordInput.value !== confirmInput.value) {
-            this.showFieldError(confirmInput, 'Passwords do not match');
-        } else {
-            this.clearFieldError(confirmInput);
-        }
-    }
-
-    nextStep() {
-        if (this.validateCurrentStep()) {
-            this.collectStepData();
-            this.currentStep++;
-            this.updateProgressBar();
-            this.showStep(this.currentStep);
-        }
-    }
-
-    prevStep() {
-        if (this.currentStep > 1) {
-            this.currentStep--;
-            this.updateProgressBar();
-            this.showStep(this.currentStep);
-        }
-    }
-
-    validateCurrentStep() {
-        const currentStepElement = document.querySelector(`.form-step[data-step="${this.currentStep}"]`);
-        const requiredFields = currentStepElement.querySelectorAll('[required]');
-        let isValid = true;
-
-        requiredFields.forEach(field => {
-            if (!this.validateField(field)) {
-                isValid = false;
-            }
-        });
-
-        return isValid;
-    }
-
-    validateField(field) {
-        const value = field.value.trim();
-        const type = field.type;
-        const name = field.name;
-
-        // Clear previous error
-        this.clearFieldError(field);
-
-        // Required field validation
-        if (field.hasAttribute('required') && !value) {
-            this.showFieldError(field, 'This field is required');
-            return false;
-        }
-
-        // Email validation
-        if (type === 'email' && value) {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(value)) {
-                this.showFieldError(field, 'Please enter a valid email address');
-                return false;
+        // Initialize first step
+        if (steps.length > 0) {
+            steps[0].classList.add('active');
+            if (progressSteps.length > 0) {
+                progressSteps[0].classList.add('active');
             }
         }
+    });
+}
 
-        // Phone validation
-        if (name === 'phone' && value) {
-            const phoneRegex = /^[0-9]{10}$/;
-            if (!phoneRegex.test(value)) {
-                this.showFieldError(field, 'Please enter a valid 10-digit phone number');
-                return false;
-            }
-        }
-
-        // Pincode validation
-        if (name === 'pincode' && value) {
-            const pincodeRegex = /^[0-9]{6}$/;
-            if (!pincodeRegex.test(value)) {
-                this.showFieldError(field, 'Please enter a valid 6-digit pincode');
-                return false;
-            }
-        }
-
-        // File validation
-        if (type === 'file' && field.files.length > 0) {
-            const file = field.files[0];
-            const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+// Next step function
+function nextStep(stepNumber) {
+    const currentStep = document.querySelector(`.form-step[data-step="${stepNumber - 1}"]`);
+    const nextStep = document.querySelector(`.form-step[data-step="${stepNumber}"]`);
+    const currentProgress = document.querySelector(`.progress-step[data-step="${stepNumber - 1}"]`);
+    const nextProgress = document.querySelector(`.progress-step[data-step="${stepNumber}"]`);
+    
+    if (currentStep && nextStep) {
+        // Validate current step
+        if (validateStep(currentStep)) {
+            currentStep.classList.remove('active');
+            nextStep.classList.add('active');
             
-            if (!allowedTypes.includes(file.type)) {
-                this.showFieldError(field, 'Please upload PDF, JPG, or PNG files only');
-                return false;
+            if (currentProgress && nextProgress) {
+                currentProgress.classList.remove('active');
+                nextProgress.classList.add('active');
             }
-
-            if (file.size > 5 * 1024 * 1024) {
-                this.showFieldError(field, 'File size should be less than 5MB');
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    showFieldError(field, message) {
-        const formGroup = field.closest('.form-group');
-        const errorElement = formGroup.querySelector('.error-message') || 
-                           document.createElement('div');
-        
-        errorElement.className = 'error-message';
-        errorElement.textContent = message;
-        
-        if (!formGroup.querySelector('.error-message')) {
-            formGroup.appendChild(errorElement);
-        }
-        
-        field.classList.add('error');
-    }
-
-    clearFieldError(field) {
-        const formGroup = field.closest('.form-group');
-        const errorElement = formGroup.querySelector('.error-message');
-        
-        if (errorElement) {
-            errorElement.remove();
-        }
-        
-        field.classList.remove('error');
-    }
-
-    collectStepData() {
-        const currentStepElement = document.querySelector(`.form-step[data-step="${this.currentStep}"]`);
-        const fields = currentStepElement.querySelectorAll('input, select, textarea');
-        
-        fields.forEach(field => {
-            if (field.type === 'file') {
-                if (field.files.length > 0) {
-                    this.formData[field.name] = field.files[0];
-                }
-            } else {
-                this.formData[field.name] = field.value;
-            }
-        });
-    }
-
-    updateProgressBar() {
-        const progressBar = document.querySelector('.progress-bar');
-        const progressText = document.querySelector('.progress-text');
-        
-        if (progressBar) {
-            const progress = (this.currentStep / this.totalSteps) * 100;
-            progressBar.style.width = `${progress}%`;
-        }
-        
-        if (progressText) {
-            progressText.textContent = `Step ${this.currentStep} of ${this.totalSteps}`;
-        }
-    }
-
-    showStep(step) {
-        const steps = document.querySelectorAll('.form-step');
-        const nextBtn = document.querySelector('.btn-next');
-        const prevBtn = document.querySelector('.btn-prev');
-        const submitBtn = document.querySelector('.btn-submit');
-
-        steps.forEach((s, index) => {
-            if (index + 1 === step) {
-                s.style.display = 'block';
-                s.classList.add('active');
-            } else {
-                s.style.display = 'none';
-                s.classList.remove('active');
-            }
-        });
-
-        // Update button visibility
-        if (prevBtn) {
-            prevBtn.style.display = step === 1 ? 'none' : 'inline-block';
-        }
-        
-        if (nextBtn) {
-            nextBtn.style.display = step === this.totalSteps ? 'none' : 'inline-block';
-        }
-        
-        if (submitBtn) {
-            submitBtn.style.display = step === this.totalSteps ? 'inline-block' : 'none';
-        }
-    }
-
-    async submitForm() {
-        if (!this.validateCurrentStep()) {
-            return;
-        }
-
-        this.collectStepData();
-        this.showLoadingModal();
-
-        try {
-            // Simulate API call
-            await this.simulateApiCall();
             
-            this.hideLoadingModal();
-            this.showSuccessModal();
-            
-            // Redirect after success
-            setTimeout(() => {
-                const isPatient = window.location.pathname.includes('patient');
-                const redirectUrl = isPatient ? 'patient-dashboard.html' : 'doctor-dashboard.html';
-                window.location.href = redirectUrl;
-            }, 2000);
-
-        } catch (error) {
-            this.hideLoadingModal();
-            this.showErrorNotification('Registration failed. Please try again.');
-        }
-    }
-
-    async simulateApiCall() {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                // Simulate processing time
-                resolve();
-            }, 3000);
-        });
-    }
-
-    showLoadingModal() {
-        const modal = document.getElementById('loadingModal');
-        if (modal) {
-            modal.style.display = 'flex';
-        }
-    }
-
-    hideLoadingModal() {
-        const modal = document.getElementById('loadingModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-    }
-
-    showSuccessModal() {
-        const modal = document.getElementById('successModal');
-        if (modal) {
-            modal.style.display = 'flex';
-        }
-    }
-
-    showErrorNotification(message) {
-        // Use the notification system from main.js
-        if (window.showNotification) {
-            window.showNotification(message, 'error');
-        } else {
-            alert(message);
+            // Scroll to top of form
+            nextStep.scrollIntoView({ behavior: 'smooth' });
         }
     }
 }
 
-// Initialize registration forms when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Check if we're on a registration page
-    if (window.location.pathname.includes('register')) {
-        new RegistrationForm();
+// Previous step function
+function prevStep(stepNumber) {
+    const currentStep = document.querySelector(`.form-step[data-step="${stepNumber + 1}"]`);
+    const prevStep = document.querySelector(`.form-step[data-step="${stepNumber}"]`);
+    const currentProgress = document.querySelector(`.progress-step[data-step="${stepNumber + 1}"]`);
+    const prevProgress = document.querySelector(`.progress-step[data-step="${stepNumber}"]`);
+    
+    if (currentStep && prevStep) {
+        currentStep.classList.remove('active');
+        prevStep.classList.add('active');
+        
+        if (currentProgress && prevProgress) {
+            currentProgress.classList.remove('active');
+            prevProgress.classList.add('active');
+        }
+        
+        // Scroll to top of form
+        prevStep.scrollIntoView({ behavior: 'smooth' });
     }
-});
+}
 
-// Export for use in other files
-window.RegistrationForm = RegistrationForm;
+// Validate step
+function validateStep(step) {
+    const requiredFields = step.querySelectorAll('[required]');
+    let isValid = true;
+    
+    requiredFields.forEach(field => {
+        if (!field.value.trim()) {
+            showFieldError(field, 'This field is required');
+            isValid = false;
+        } else {
+            clearFieldError(field);
+        }
+    });
+    
+    return isValid;
+}
+
+// File upload setup
+function setupFileUploads() {
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    
+    fileInputs.forEach(input => {
+        input.addEventListener('change', handleFileUpload);
+    });
+    
+    // Drag and drop functionality
+    const uploadAreas = document.querySelectorAll('.upload-area');
+    uploadAreas.forEach(area => {
+        area.addEventListener('dragover', handleDragOver);
+        area.addEventListener('drop', handleDrop);
+        area.addEventListener('click', () => {
+            const fileInput = area.querySelector('input[type="file"]');
+            if (fileInput) fileInput.click();
+        });
+    });
+}
+
+// Handle file upload
+function handleFileUpload(e) {
+    const files = Array.from(e.target.files);
+    const uploadArea = e.target.closest('.upload-area');
+    const uploadedFiles = uploadArea.parentElement.querySelector('.uploaded-files');
+    
+    if (uploadedFiles) {
+        uploadedFiles.innerHTML = '';
+        
+        files.forEach(file => {
+            const fileItem = createFileItem(file);
+            uploadedFiles.appendChild(fileItem);
+        });
+    }
+}
+
+// Create file item element
+function createFileItem(file) {
+    const fileItem = document.createElement('div');
+    fileItem.className = 'file-item';
+    fileItem.innerHTML = `
+        <div class="file-info">
+            <i class="fas fa-file"></i>
+            <span class="file-name">${file.name}</span>
+            <span class="file-size">${formatFileSize(file.size)}</span>
+        </div>
+        <button type="button" class="remove-file" onclick="removeFile(this)">
+            <i class="fas fa-times"></i>
+        </button>
+    `;
+    return fileItem;
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Remove file
+function removeFile(button) {
+    const fileItem = button.closest('.file-item');
+    const fileInput = fileItem.closest('.upload-section').querySelector('input[type="file"]');
+    
+    // Clear file input
+    fileInput.value = '';
+    fileItem.remove();
+}
+
+// Handle drag over
+function handleDragOver(e) {
+    e.preventDefault();
+    e.currentTarget.classList.add('drag-over');
+}
+
+// Handle drop
+function handleDrop(e) {
+    e.preventDefault();
+    e.currentTarget.classList.remove('drag-over');
+    
+    const files = Array.from(e.dataTransfer.files);
+    const fileInput = e.currentTarget.querySelector('input[type="file"]');
+    
+    if (fileInput) {
+        fileInput.files = e.dataTransfer.files;
+        handleFileUpload({ target: fileInput });
+    }
+}
+
+// Registration forms setup
+function setupRegistrationForms() {
+    const patientRegisterForm = document.getElementById('patientRegisterForm');
+    const doctorRegisterForm = document.getElementById('doctorRegisterForm');
+    
+    if (patientRegisterForm) {
+        patientRegisterForm.addEventListener('submit', handlePatientRegistration);
+    }
+    
+    if (doctorRegisterForm) {
+        doctorRegisterForm.addEventListener('submit', handleDoctorRegistration);
+    }
+}
+
+// Handle patient registration
+async function handlePatientRegistration(e) {
+    e.preventDefault();
+    
+    if (!validateForm(e.target)) {
+        return;
+    }
+    
+    const formData = new FormData(e.target);
+    const registrationData = {
+        firstName: formData.get('firstName'),
+        lastName: formData.get('lastName'),
+        email: formData.get('email'),
+        phone: formData.get('phone'),
+        password: formData.get('password'),
+        dateOfBirth: formData.get('dateOfBirth'),
+        gender: formData.get('gender'),
+        address: {
+            street: formData.get('address') || '',
+            city: formData.get('city'),
+            state: formData.get('state'),
+            pincode: formData.get('pincode')
+        },
+        bloodGroup: formData.get('bloodGroup') || '',
+        emergencyContact: {
+            name: formData.get('emergencyContact'),
+            phone: formData.get('emergencyPhone')
+        },
+        medicalHistory: formData.get('medicalHistory') ? [{
+            condition: formData.get('medicalHistory'),
+            diagnosedDate: new Date(),
+            status: 'active'
+        }] : [],
+        allergies: formData.get('allergies') ? [{
+            allergen: formData.get('allergies'),
+            severity: 'mild'
+        }] : [],
+        currentMedications: formData.get('currentMedications') ? [{
+            name: formData.get('currentMedications'),
+            dosage: '',
+            frequency: '',
+            startDate: new Date()
+        }] : []
+    };
+    
+    // Show loading state
+    showLoadingModal();
+    
+    try {
+        const response = await fetch('/api/auth/patient/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(registrationData)
+        });
+
+        const data = await response.json();
+        
+        if (response.ok && data.success) {
+            hideLoadingModal();
+            
+            // Store user data and token
+            const userData = {
+                ...data.data.patient,
+                type: 'patient',
+                token: data.data.token
+            };
+            
+            localStorage.setItem('cliqpat_user', JSON.stringify(userData));
+            
+            showSuccessModal();
+        } else {
+            hideLoadingModal();
+            showNotification(data.message || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        hideLoadingModal();
+        showNotification('Network error. Please try again.', 'error');
+    }
+}
+
+// Handle doctor registration
+async function handleDoctorRegistration(e) {
+    e.preventDefault();
+    
+    console.log('Form submission started');
+    
+    if (!validateForm(e.target)) {
+        console.log('Form validation failed');
+        showNotification('Please fill in all required fields correctly', 'error');
+        return;
+    }
+    
+    console.log('Form validation passed, collecting data...');
+    
+    const formData = new FormData(e.target);
+    
+    // Debug: Log all form data
+    console.log('All form data:');
+    for (let [key, value] of formData.entries()) {
+        console.log(`${key}: ${value}`);
+    }
+    
+    const registrationData = {
+        firstName: formData.get('firstName'),
+        lastName: formData.get('lastName'),
+        email: formData.get('email'),
+        phone: formData.get('phone'),
+        password: formData.get('password'),
+        specialization: formData.get('specialization'),
+        experience: parseInt(formData.get('experience')),
+        qualifications: formData.get('qualifications'),
+        clinicName: formData.get('clinicName'),
+        clinicAddress: {
+            street: formData.get('clinicAddress') || '',
+            city: formData.get('clinicCity'),
+            state: formData.get('clinicState'),
+            pincode: formData.get('clinicPincode')
+        },
+        consultationFee: parseInt(formData.get('consultationFee')),
+        registrationFee: parseInt(formData.get('registrationFee')),
+        clinicTimings: {
+            monday: {
+                start: formData.get('weekdayStart'),
+                end: formData.get('weekdayEnd'),
+                isOpen: true
+            },
+            tuesday: {
+                start: formData.get('weekdayStart'),
+                end: formData.get('weekdayEnd'),
+                isOpen: true
+            },
+            wednesday: {
+                start: formData.get('weekdayStart'),
+                end: formData.get('weekdayEnd'),
+                isOpen: true
+            },
+            thursday: {
+                start: formData.get('weekdayStart'),
+                end: formData.get('weekdayEnd'),
+                isOpen: true
+            },
+            friday: {
+                start: formData.get('weekdayStart'),
+                end: formData.get('weekdayEnd'),
+                isOpen: true
+            },
+            saturday: {
+                start: formData.get('saturdayStart') || '09:00',
+                end: formData.get('saturdayEnd') || '13:00',
+                isOpen: !!formData.get('saturdayStart')
+            },
+            sunday: {
+                start: formData.get('sundayStart') || '09:00',
+                end: formData.get('sundayEnd') || '13:00',
+                isOpen: !!formData.get('sundayStart')
+            }
+        }
+    };
+    
+    // Show loading state
+    showLoadingModal();
+    
+    // Debug: Log the registration data being sent
+    console.log('Registration data being sent:', registrationData);
+    
+    try {
+        const response = await fetch('/api/auth/doctor/register', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(registrationData)
+        });
+
+        // Debug: Log the response
+        console.log('Response status:', response.status);
+        console.log('Response headers:', response.headers);
+
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        if (response.ok && data.success) {
+            hideLoadingModal();
+            showSuccessModal();
+        } else {
+            hideLoadingModal();
+            showNotification(data.message || 'Registration failed', 'error');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        hideLoadingModal();
+        showNotification('Network error. Please try again.', 'error');
+    }
+}
+
+// Validate form
+function validateForm(form) {
+    const inputs = form.querySelectorAll('input[required], select[required], textarea[required]');
+    let isValid = true;
+    let missingFields = [];
+    
+    inputs.forEach(input => {
+        if (!input.value.trim()) {
+            showFieldError(input, 'This field is required');
+            isValid = false;
+            missingFields.push(input.name || input.id);
+        } else {
+            clearFieldError(input);
+        }
+    });
+    
+    // Validate password confirmation
+    const password = form.querySelector('input[name="password"]');
+    const confirmPassword = form.querySelector('input[name="confirmPassword"]');
+    
+    if (password && confirmPassword && password.value !== confirmPassword.value) {
+        showFieldError(confirmPassword, 'Passwords do not match');
+        isValid = false;
+    }
+    
+    // Debug: Log validation results
+    if (!isValid) {
+        console.log('Validation failed. Missing fields:', missingFields);
+    } else {
+        console.log('Form validation passed');
+    }
+    
+    return isValid;
+}
+
+// Show field error
+function showFieldError(field, message) {
+    clearFieldError(field);
+    
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'field-error';
+    errorDiv.textContent = message;
+    errorDiv.style.cssText = `
+        color: #ef4444;
+        font-size: 0.75rem;
+        margin-top: 0.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    `;
+    
+    field.parentElement.appendChild(errorDiv);
+    field.classList.add('error');
+    field.style.borderColor = '#ef4444';
+}
+
+// Clear field error
+function clearFieldError(field) {
+    const errorDiv = field.parentElement.querySelector('.field-error');
+    if (errorDiv) {
+        errorDiv.remove();
+    }
+    field.classList.remove('error');
+    field.style.borderColor = '';
+}
+
+// Show loading modal
+function showLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+// Hide loading modal
+function showSuccessModal() {
+    const modal = document.getElementById('successModal');
+    if (modal) {
+        modal.classList.add('active');
+    }
+}
+
+// Show notification
+function showNotification(message, type = 'info') {
+    if (window.AuthUtils && window.AuthUtils.showNotification) {
+        window.AuthUtils.showNotification(message, type);
+    } else {
+        // Fallback notification
+        alert(message);
+    }
+}
+
+// Export functions for global use
+window.RegistrationUtils = {
+    nextStep,
+    prevStep,
+    validateStep,
+    handleFileUpload,
+    removeFile,
+    showNotification
+};
 

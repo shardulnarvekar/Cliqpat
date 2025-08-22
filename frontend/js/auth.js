@@ -173,7 +173,7 @@ function setupLoginForms() {
 }
 
 // Handle Patient Login
-function handlePatientLogin(e) {
+async function handlePatientLogin(e) {
     e.preventDefault();
     
     if (!validateForm(e.target)) {
@@ -188,18 +188,23 @@ function handlePatientLogin(e) {
     // Show loading state
     showLoadingModal();
     
-    // Simulate API call
-    setTimeout(() => {
-        hideLoadingModal();
+    try {
+        const response = await fetch('/api/auth/patient/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
         
-        // Simulate successful login
-        if (email && password) {
-            // Store user data
+        if (response.ok && data.success) {
+            // Store user data and token
             const userData = {
-                email: email,
+                ...data.data.patient,
                 type: 'patient',
-                name: 'John Doe',
-                id: 'P001'
+                token: data.data.token
             };
             
             if (remember) {
@@ -208,15 +213,21 @@ function handlePatientLogin(e) {
                 sessionStorage.setItem('cliqpat_user', JSON.stringify(userData));
             }
             
+            hideLoadingModal();
             showSuccessModal('patient');
         } else {
-            showNotification('Invalid email or password', 'error');
+            hideLoadingModal();
+            showNotification(data.message || 'Login failed', 'error');
         }
-    }, 2000);
+    } catch (error) {
+        console.error('Login error:', error);
+        hideLoadingModal();
+        showNotification('Network error. Please try again.', 'error');
+    }
 }
 
 // Handle Doctor Login
-function handleDoctorLogin(e) {
+async function handleDoctorLogin(e) {
     e.preventDefault();
     
     if (!validateForm(e.target)) {
@@ -231,19 +242,23 @@ function handleDoctorLogin(e) {
     // Show loading state
     showLoadingModal();
     
-    // Simulate API call
-    setTimeout(() => {
-        hideLoadingModal();
+    try {
+        const response = await fetch('/api/auth/doctor/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email, password })
+        });
+
+        const data = await response.json();
         
-        // Simulate successful login
-        if (email && password) {
-            // Store user data
+        if (response.ok && data.success) {
+            // Store user data and token
             const userData = {
-                email: email,
+                ...data.data.doctor,
                 type: 'doctor',
-                name: 'Dr. Sarah Smith',
-                id: 'D001',
-                clinic: 'Dr. Sarah Smith\'s Cardiology Clinic'
+                token: data.data.token
             };
             
             if (remember) {
@@ -252,11 +267,17 @@ function handleDoctorLogin(e) {
                 sessionStorage.setItem('cliqpat_user', JSON.stringify(userData));
             }
             
+            hideLoadingModal();
             showSuccessModal('doctor');
         } else {
-            showNotification('Invalid email or password', 'error');
+            hideLoadingModal();
+            showNotification(data.message || 'Login failed', 'error');
         }
-    }, 2000);
+    } catch (error) {
+        console.error('Login error:', error);
+        hideLoadingModal();
+        showNotification('Network error. Please try again.', 'error');
+    }
 }
 
 // Validate Form
@@ -297,7 +318,7 @@ function handleGoogleLogin(e) {
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
     button.disabled = true;
     
-    // Simulate Google OAuth
+    // Simulate Google OAuth (for now)
     setTimeout(() => {
         // Simulate successful login
         const userData = {
@@ -324,7 +345,7 @@ function handleFacebookLogin(e) {
     button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Connecting...';
     button.disabled = true;
     
-    // Simulate Facebook OAuth
+    // Simulate Facebook OAuth (for now)
     setTimeout(() => {
         // Simulate successful login
         const userData = {
@@ -484,6 +505,55 @@ function showPasswordStrength(input, strength) {
     strengthIndicator.style.marginTop = '0.25rem';
 }
 
+// Show Notification
+function showNotification(message, type = 'info') {
+    // Create notification element
+    const notification = document.createElement('div');
+    notification.className = `notification notification-${type}`;
+    notification.innerHTML = `
+        <div class="notification-content">
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
+            <span>${message}</span>
+        </div>
+        <button class="notification-close">&times;</button>
+    `;
+    
+    // Add styles
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 1rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        z-index: 10000;
+        max-width: 400px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
+        animation: slideInRight 0.3s ease-out;
+    `;
+    
+    // Add to body
+    document.body.appendChild(notification);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (notification.parentElement) {
+            notification.remove();
+        }
+    }, 5000);
+    
+    // Close button functionality
+    const closeBtn = notification.querySelector('.notification-close');
+    closeBtn.addEventListener('click', () => {
+        notification.remove();
+    });
+}
+
 // Initialize additional features
 document.addEventListener('DOMContentLoaded', function() {
     autoFillForm();
@@ -500,6 +570,7 @@ window.AuthUtils = {
     checkAuthStatus,
     validateEmail,
     validatePhone,
-    validatePassword
+    validatePassword,
+    showNotification
 };
 

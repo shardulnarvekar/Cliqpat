@@ -1,0 +1,283 @@
+const mongoose = require('mongoose');
+
+const appointmentSchema = new mongoose.Schema({
+    // Doctor Information
+    doctor: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Doctor',
+        required: [true, 'Doctor is required']
+    },
+    
+    // Patient Information
+    patient: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Patient',
+        required: [true, 'Patient is required']
+    },
+    
+    // Appointment Details
+    appointmentDate: {
+        type: Date,
+        required: [true, 'Appointment date is required']
+    },
+    appointmentTime: {
+        type: String,
+        required: [true, 'Appointment time is required']
+    },
+    duration: {
+        type: Number,
+        default: 30, // minutes
+        min: [15, 'Duration must be at least 15 minutes'],
+        max: [120, 'Duration cannot exceed 2 hours']
+    },
+    
+    // Appointment Type
+    type: {
+        type: String,
+        enum: ['consultation', 'follow_up', 'emergency', 'routine_checkup'],
+        default: 'consultation'
+    },
+    
+    // Status
+    status: {
+        type: String,
+        enum: ['scheduled', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'],
+        default: 'scheduled'
+    },
+    
+    // Reason and Notes
+    reason: {
+        type: String,
+        required: [true, 'Appointment reason is required']
+    },
+    notes: String,
+    symptoms: [String],
+    
+    // Fees
+    consultationFee: {
+        type: Number,
+        required: [true, 'Consultation fee is required']
+    },
+    registrationFee: {
+        type: Number,
+        default: 0
+    },
+    totalAmount: {
+        type: Number,
+        required: [true, 'Total amount is required']
+    },
+    
+    // Payment Status
+    paymentStatus: {
+        type: String,
+        enum: ['pending', 'paid', 'refunded'],
+        default: 'pending'
+    },
+    paymentMethod: String,
+    paymentDate: Date,
+    
+    // AI Screening
+    aiScreening: {
+        isCompleted: { type: Boolean, default: false },
+        reportUrl: String,
+        riskLevel: {
+            type: String,
+            enum: ['low', 'medium', 'high'],
+            default: 'low'
+        },
+        completedAt: Date
+    },
+    
+    // Medical Records
+    prescription: {
+        isPrescribed: { type: Boolean, default: false },
+        prescriptionText: String,
+        prescribedMedicines: [{
+            name: String,
+            dosage: String,
+            frequency: String,
+            duration: String,
+            instructions: String
+        }],
+        prescribedAt: Date
+    },
+    
+    // Follow-up
+    followUp: {
+        isRequired: { type: Boolean, default: false },
+        followUpDate: Date,
+        followUpReason: String
+    },
+    
+    // Timestamps
+    createdAt: {
+        type: Date,
+        default: Date.now
+    },
+    updatedAt: {
+        type: Date,
+        default: Date.now
+    }
+}, {
+    timestamps: true
+});
+
+// Virtual for appointment datetime
+appointmentSchema.virtual('appointmentDateTime').get(function() {
+    if (!this.appointmentDate || !this.appointmentTime) return null;
+    
+    const date = new Date(this.appointmentDate);
+    const [hours, minutes] = this.appointmentTime.split(':');
+    date.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    return date;
+});
+
+// Virtual for appointment end time
+appointmentSchema.virtual('appointmentEndTime').get(function() {
+    if (!this.appointmentDateTime) return null;
+    
+    const endTime = new Date(this.appointmentDateTime);
+    endTime.setMinutes(endTime.getMinutes() + this.duration);
+    return endTime;
+});
+
+// Virtual for is upcoming
+appointmentSchema.virtual('isUpcoming').get(function() {
+    if (!this.appointmentDateTime) return false;
+    
+    const now = new Date();
+    return this.appointmentDateTime > now && this.status === 'confirmed';
+});
+
+// Virtual for is past
+appointmentSchema.virtual('isPast').get(function() {
+    if (!this.appointmentDateTime) return false;
+    
+    const now = new Date();
+    return this.appointmentDateTime < now;
+});
+
+// Virtual for is today
+appointmentSchema.virtual('isToday').get(function() {
+    if (!this.appointmentDate) return false;
+    
+    const today = new Date();
+    const appointmentDate = new Date(this.appointmentDate);
+    
+    return today.toDateString() === appointmentDate.toDateString();
+});
+
+// Indexes for efficient queries
+appointmentSchema.index({ doctor: 1, appointmentDate: 1, appointmentTime: 1 });
+appointmentSchema.index({ patient: 1, appointmentDate: 1 });
+appointmentSchema.index({ status: 1, appointmentDate: 1 });
+appointmentSchema.index({ appointmentDate: 1, appointmentTime: 1 });
+
+// Pre-save middleware to calculate total amount
+appointmentSchema.pre('save', function(next) {
+    this.totalAmount = this.consultationFee + this.registrationFee;
+    next();
+});
+
+// Static method to check availability
+appointmentSchema.statics.checkAvailability = async function(doctorId, date, time, duration = 30) {
+    const appointmentDate = new Date(date);
+    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    
+    // Check if doctor is available on this day
+    const doctor = await mongoose.model('Doctor').findById(doctorId);
+    if (!doctor || !doctor.isClinicOpen(dayOfWeek, time)) {
+        return { available: false, reason: 'Clinic is closed on this day/time' };
+    }
+    
+    // Check for conflicting appointments
+    const conflictingAppointments = await this.find({
+        doctor: doctorId,
+        appointmentDate: appointmentDate,
+        status: { $in: ['scheduled', 'confirmed'] },
+        $or: [
+            {
+                appointmentTime: time,
+                duration: { $exists: true }
+            },
+            {
+                appointmentTime: { $lt: time }
+            }
+        ]
+    });
+
+    // Additional check for overlapping appointments with duration
+    if (conflictingAppointments.length === 0) {
+        // Check for appointments that might overlap due to duration
+        const overlappingAppointments = await this.find({
+            doctor: doctorId,
+            appointmentDate: appointmentDate,
+            status: { $in: ['scheduled', 'confirmed'] },
+            appointmentTime: { $lt: time }
+        });
+
+        // Check if any existing appointment's end time overlaps with the new appointment start time
+        for (const appointment of overlappingAppointments) {
+            if (appointment.duration) {
+                const appointmentStart = new Date(`${appointment.appointmentDate.toISOString().split('T')[0]}T${appointment.appointmentTime}`);
+                const appointmentEnd = new Date(appointmentStart.getTime() + (appointment.duration * 60000)); // duration in milliseconds
+                const newAppointmentStart = new Date(`${appointmentDate.toISOString().split('T')[0]}T${time}`);
+                
+                if (appointmentEnd > newAppointmentStart) {
+                    return { available: false, reason: 'Time slot overlaps with existing appointment' };
+                }
+            }
+        }
+    }
+    
+    if (conflictingAppointments.length > 0) {
+        return { available: false, reason: 'Time slot is already booked' };
+    }
+    
+    return { available: true };
+};
+
+// Static method to get available slots
+appointmentSchema.statics.getAvailableSlots = async function(doctorId, date) {
+    const doctor = await mongoose.model('Doctor').findById(doctorId);
+    if (!doctor) return [];
+    
+    const appointmentDate = new Date(date);
+    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    const daySchedule = doctor.clinicTimings[dayOfWeek];
+    
+    if (!daySchedule || !daySchedule.isOpen) return [];
+    
+    const slots = [];
+    const startTime = new Date(`2000-01-01 ${daySchedule.start}`);
+    const endTime = new Date(`2000-01-01 ${daySchedule.end}`);
+    const slotDuration = 30; // 30 minutes per slot
+    
+    let currentTime = new Date(startTime);
+    
+    while (currentTime < endTime) {
+        const timeString = currentTime.toTimeString().slice(0, 5);
+        
+        // Check if this slot is available
+        const isAvailable = await this.checkAvailability(doctorId, date, timeString, slotDuration);
+        
+        if (isAvailable.available) {
+            slots.push({
+                time: timeString,
+                available: true
+            });
+        } else {
+            slots.push({
+                time: timeString,
+                available: false,
+                reason: isAvailable.reason
+            });
+        }
+        
+        currentTime.setMinutes(currentTime.getMinutes() + slotDuration);
+    }
+    
+    return slots;
+};
+
+module.exports = mongoose.model('Appointment', appointmentSchema);
