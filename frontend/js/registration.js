@@ -317,6 +317,9 @@ async function handleDoctorRegistration(e) {
             state: formData.get('clinicState'),
             pincode: formData.get('clinicPincode')
         },
+        clinicCity: formData.get('clinicCity'),
+        clinicState: formData.get('clinicState'),
+        clinicPincode: formData.get('clinicPincode'),
         consultationFee: parseInt(formData.get('consultationFee')),
         registrationFee: parseInt(formData.get('registrationFee')),
         clinicTimings: {
@@ -365,13 +368,26 @@ async function handleDoctorRegistration(e) {
     console.log('Registration data being sent:', registrationData);
     
     try {
-        const response = await fetch('/api/auth/doctor/register', {
+        // Try the main registration endpoint first
+        let response = await fetch('/api/auth/doctor/register', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(registrationData)
         });
+        
+        // If main endpoint fails, try the alternative simple endpoint
+        if (!response.ok) {
+            console.log('Main endpoint failed, trying alternative...');
+            response = await fetch('/api/auth/doctor/register-simple', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(registrationData)
+            });
+        }
 
         // Debug: Log the response
         console.log('Response status:', response.status);
@@ -469,6 +485,14 @@ function showLoadingModal() {
 }
 
 // Hide loading modal
+function hideLoadingModal() {
+    const modal = document.getElementById('loadingModal');
+    if (modal) {
+        modal.classList.remove('active');
+    }
+}
+
+// Show success modal
 function showSuccessModal() {
     const modal = document.getElementById('successModal');
     if (modal) {

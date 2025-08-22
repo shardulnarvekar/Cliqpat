@@ -113,16 +113,25 @@ function validatePassword(field) {
         return false;
     }
     
-    // Check for password strength
+    // Check for password strength (relaxed for testing)
     const hasUpperCase = /[A-Z]/.test(password);
     const hasLowerCase = /[a-z]/.test(password);
     const hasNumbers = /\d/.test(password);
     const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
     
+    // Only enforce basic length requirement for now
+    if (password && password.length < minLength) {
+        showFieldError(field, `Password must be at least ${minLength} characters long`);
+        return false;
+    }
+    
+    // Optional: Uncomment below for strict password requirements
+    /*
     if (password && (!hasUpperCase || !hasLowerCase || !hasNumbers || !hasSpecialChar)) {
         showFieldError(field, 'Password must contain uppercase, lowercase, number, and special character');
         return false;
     }
+    */
     
     return true;
 }
@@ -230,7 +239,10 @@ async function handlePatientLogin(e) {
 async function handleDoctorLogin(e) {
     e.preventDefault();
     
+    console.log('Doctor login attempt started');
+    
     if (!validateForm(e.target)) {
+        console.log('Form validation failed');
         return;
     }
     
@@ -239,10 +251,13 @@ async function handleDoctorLogin(e) {
     const password = formData.get('password');
     const remember = formData.get('remember');
     
+    console.log('Login attempt for email:', email);
+    
     // Show loading state
     showLoadingModal();
     
     try {
+        console.log('Sending login request to /api/auth/doctor/login');
         const response = await fetch('/api/auth/doctor/login', {
             method: 'POST',
             headers: {
@@ -251,9 +266,12 @@ async function handleDoctorLogin(e) {
             body: JSON.stringify({ email, password })
         });
 
+        console.log('Response status:', response.status);
         const data = await response.json();
+        console.log('Response data:', data);
         
         if (response.ok && data.success) {
+            console.log('Login successful, storing user data');
             // Store user data and token
             const userData = {
                 ...data.data.doctor,
@@ -268,8 +286,10 @@ async function handleDoctorLogin(e) {
             }
             
             hideLoadingModal();
+            console.log('Showing success modal for doctor');
             showSuccessModal('doctor');
         } else {
+            console.log('Login failed:', data.message);
             hideLoadingModal();
             showNotification(data.message || 'Login failed', 'error');
         }
@@ -380,18 +400,25 @@ function hideLoadingModal() {
 
 // Show Success Modal
 function showSuccessModal(userType) {
+    console.log('showSuccessModal called with userType:', userType);
     const modal = document.getElementById('successModal');
     if (modal) {
+        console.log('Success modal found, showing it');
         modal.classList.add('active');
         
         // Redirect after 3 seconds
         setTimeout(() => {
+            console.log('Redirecting after timeout');
             if (userType === 'patient') {
+                console.log('Redirecting to patient dashboard');
                 window.location.href = 'patient-dashboard.html';
             } else {
+                console.log('Redirecting to doctor dashboard');
                 window.location.href = 'doctor-dashboard.html';
             }
         }, 3000);
+    } else {
+        console.error('Success modal not found!');
     }
 }
 

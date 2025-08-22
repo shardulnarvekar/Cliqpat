@@ -89,7 +89,9 @@ const findAvailablePort = async (startPort) => {
 // Function to start server with automatic port selection
 const startServer = async () => {
     try {
-        const availablePort = await findAvailablePort(PORT);
+        // Force use port 5000 for consistency
+        const desiredPort = 5000;
+        const availablePort = await findAvailablePort(desiredPort);
         
         const server = app.listen(availablePort)
             .on('listening', () => {

@@ -185,4 +185,98 @@ router.get('/states/list', async (req, res) => {
     }
 });
 
+// Verify/Approve Doctor (Admin route)
+router.put('/:doctorId/verify', async (req, res) => {
+    try {
+        const { doctorId } = req.params;
+        const { verificationStatus, verificationNotes } = req.body;
+
+        // Validate verification status
+        if (!['pending', 'approved', 'rejected'].includes(verificationStatus)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid verification status. Must be pending, approved, or rejected.'
+            });
+        }
+
+        const doctor = await Doctor.findById(doctorId);
+        if (!doctor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Doctor not found'
+            });
+        }
+
+        // Update verification status
+        doctor.verificationStatus = verificationStatus;
+        doctor.isVerified = verificationStatus === 'approved';
+        if (verificationNotes) {
+            doctor.verificationNotes = verificationNotes;
+        }
+
+        await doctor.save();
+
+        res.json({
+            success: true,
+            message: `Doctor verification status updated to ${verificationStatus}`,
+            data: {
+                doctor: doctor.getPublicProfile()
+            }
+        });
+
+    } catch (error) {
+        console.error('Verify doctor error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Get all doctors (including pending ones - for admin)
+router.get('/admin/all', async (req, res) => {
+    try {
+        const { verificationStatus, page = 1, limit = 20 } = req.query;
+        
+        const query = {};
+        if (verificationStatus) {
+            query.verificationStatus = verificationStatus;
+        }
+
+        const skip = (page - 1) * limit;
+
+        const doctors = await Doctor.find(query)
+            .select('-password -verificationDocuments')
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        const total = await Doctor.countDocuments(query);
+
+        res.json({
+            success: true,
+            message: 'Doctors retrieved successfully',
+            data: {
+                doctors,
+                pagination: {
+                    currentPage: parseInt(page),
+                    totalPages: Math.ceil(total / limit),
+                    totalDoctors: total,
+                    hasNext: page * limit < total,
+                    hasPrev: page > 1
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get all doctors error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
 module.exports = router;
