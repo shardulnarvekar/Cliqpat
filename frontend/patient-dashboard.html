@@ -246,7 +246,429 @@
 
                 <!-- Clinics List -->
                 <div class="clinics-grid" id="clinicsGrid">
-                    <!-- Clinic cards will be populated here -->
+                    <!-- Sample Doctor Cards with Weekly Slots -->
+                    <div class="clinic-card">
+                        <div class="clinic-header">
+                            <div class="clinic-info">
+                                <img src="images/doctor1.jpg" alt="Dr. Sarah Smith" class="doctor-avatar">
+                                <div>
+                                    <h3>Dr. Sarah Smith</h3>
+                                    <p>Cardiology • Apollo Hospital</p>
+                                    <div class="clinic-meta">
+                                        <span class="experience"><i class="fas fa-user-md"></i> 15 years exp</span>
+                                        <span class="rating"><i class="fas fa-star"></i> 4.8 (120 reviews)</span>
+                                        <span class="distance"><i class="fas fa-map-marker-alt"></i> 2.5 km</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="consultation-fee">
+                                <span class="fee">₹500</span>
+                                <span class="label">Consultation</span>
+                            </div>
+                        </div>
+                        
+                        <div class="clinic-actions">
+                            <button class="btn btn-outline" onclick="showWeeklySlots('doctor1')">
+                                <i class="fas fa-calendar-week"></i>
+                                View Weekly Slots
+                            </button>
+                            <button class="btn btn-success" onclick="initiateAICall('doctor1')">
+                                <i class="fas fa-phone"></i>
+                                AI Call
+                            </button>
+                            <button class="btn btn-primary" onclick="quickBookAppointment('doctor1')">
+                                <i class="fas fa-calendar-plus"></i>
+                                Book Now
+                            </button>
+                        </div>
+                        
+                        <!-- Weekly Slots View (Initially Hidden) -->
+                        <div class="weekly-slots" id="doctor1-slots" style="display: none;">
+                            <div class="slots-header">
+                                <h4>Available This Week</h4>
+                                <button class="close-slots" onclick="hideWeeklySlots('doctor1')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="week-navigation">
+                                <button class="week-nav-btn" onclick="previousWeek('doctor1')">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="week-range" id="doctor1-week-range">Dec 16 - 22, 2024</span>
+                                <button class="week-nav-btn" onclick="nextWeek('doctor1')">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="daily-slots">
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Mon</span>
+                                        <span class="day-date">16</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-16', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-16', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-16', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-16', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Tue</span>
+                                        <span class="day-date">17</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-17', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-17', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-17', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-17', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Wed</span>
+                                        <span class="day-date">18</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-18', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-18', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-18', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-18', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Thu</span>
+                                        <span class="day-date">19</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-19', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-19', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-19', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-19', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Fri</span>
+                                        <span class="day-date">20</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-20', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-20', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-20', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor1', '2024-12-20', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column closed">
+                                    <div class="day-header">
+                                        <span class="day-name">Sat</span>
+                                        <span class="day-date">21</span>
+                                    </div>
+                                    <div class="closed-notice">
+                                        <span>Closed</span>
+                                    </div>
+                                </div>
+                                <div class="day-column closed">
+                                    <div class="day-header">
+                                        <span class="day-name">Sun</span>
+                                        <span class="day-date">22</span>
+                                    </div>
+                                    <div class="closed-notice">
+                                        <span>Closed</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="slots-legend">
+                                <div class="legend-item">
+                                    <span class="legend-color available"></span>
+                                    <span>Available (1 hour slots)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color booked"></span>
+                                    <span>Booked</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color break"></span>
+                                    <span>Break Time (1-2 PM)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Second Doctor Card -->
+                    <div class="clinic-card">
+                        <div class="clinic-header">
+                            <div class="clinic-info">
+                                <img src="images/doctor2.jpg" alt="Dr. Michael Johnson" class="doctor-avatar">
+                                <div>
+                                    <h3>Dr. Michael Johnson</h3>
+                                    <p>General Medicine • City Clinic</p>
+                                    <div class="clinic-meta">
+                                        <span class="experience"><i class="fas fa-user-md"></i> 12 years exp</span>
+                                        <span class="rating"><i class="fas fa-star"></i> 4.6 (89 reviews)</span>
+                                        <span class="distance"><i class="fas fa-map-marker-alt"></i> 1.8 km</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="consultation-fee">
+                                <span class="fee">₹300</span>
+                                <span class="label">Consultation</span>
+                            </div>
+                        </div>
+                        
+                        <div class="clinic-actions">
+                            <button class="btn btn-outline" onclick="showWeeklySlots('doctor2')">
+                                <i class="fas fa-calendar-week"></i>
+                                View Weekly Slots
+                            </button>
+                            <button class="btn btn-success" onclick="initiateAICall('doctor2')">
+                                <i class="fas fa-phone"></i>
+                                AI Call
+                            </button>
+                            <button class="btn btn-primary" onclick="quickBookAppointment('doctor2')">
+                                <i class="fas fa-calendar-plus"></i>
+                                Book Now
+                            </button>
+                        </div>
+                        
+                        <!-- Weekly Slots View (Initially Hidden) -->
+                        <div class="weekly-slots" id="doctor2-slots" style="display: none;">
+                            <div class="slots-header">
+                                <h4>Available This Week</h4>
+                                <button class="close-slots" onclick="hideWeeklySlots('doctor2')">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="week-navigation">
+                                <button class="week-nav-btn" onclick="previousWeek('doctor2')">
+                                    <i class="fas fa-chevron-left"></i>
+                                </button>
+                                <span class="week-range" id="doctor2-week-range">Dec 16 - 22, 2024</span>
+                                <button class="week-nav-btn" onclick="nextWeek('doctor2')">
+                                    <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                            <div class="daily-slots">
+                                <!-- Similar structure but with different availability -->
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Mon</span>
+                                        <span class="day-date">16</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-16', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-16', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-16', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-16', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Additional days similar to doctor1 -->
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Tue</span>
+                                        <span class="day-date">17</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-17', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-17', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-17', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-17', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- Continue with remaining days -->
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Wed</span>
+                                        <span class="day-date">18</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot booked" disabled>
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-18', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-18', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-18', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-18', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Thu</span>
+                                        <span class="day-date">19</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-19', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-19', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-19', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-19', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot booked" disabled>
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Fri</span>
+                                        <span class="day-date">20</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-20', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-20', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-20', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-20', '15:00')">
+                                            15:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-20', '16:00')">
+                                            16:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column">
+                                    <div class="day-header">
+                                        <span class="day-name">Sat</span>
+                                        <span class="day-date">21</span>
+                                    </div>
+                                    <div class="time-slots">
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-21', '09:00')">
+                                            09:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-21', '10:00')">
+                                            10:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-21', '11:00')">
+                                            11:00
+                                        </button>
+                                        <button class="time-slot available" onclick="bookSlot('doctor2', '2024-12-21', '12:00')">
+                                            12:00
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="day-column closed">
+                                    <div class="day-header">
+                                        <span class="day-name">Sun</span>
+                                        <span class="day-date">22</span>
+                                    </div>
+                                    <div class="closed-notice">
+                                        <span>Closed</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="slots-legend">
+                                <div class="legend-item">
+                                    <span class="legend-color available"></span>
+                                    <span>Available (1 hour slots)</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color booked"></span>
+                                    <span>Booked</span>
+                                </div>
+                                <div class="legend-item">
+                                    <span class="legend-color break"></span>
+                                    <span>Break Time (1-2 PM)</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </section>
 
@@ -590,6 +1012,199 @@
             </div>
             <div class="modal-body">
                 <!-- Appointment details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Call Modal -->
+    <div class="modal" id="aiCallModal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3>AI Health Call</h3>
+                <button class="modal-close" onclick="closeAICallModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="ai-call-interface">
+                    <!-- Doctor Info -->
+                    <div class="call-doctor-info">
+                        <img src="" alt="Doctor" class="call-doctor-avatar" id="callDoctorAvatar">
+                        <div class="call-doctor-details">
+                            <h3 id="callDoctorName">Dr. Sarah Smith</h3>
+                            <p id="callDoctorSpecialty">Cardiology • Apollo Hospital</p>
+                            <span class="call-status" id="callStatus">Initiating AI Call...</span>
+                        </div>
+                    </div>
+
+                    <!-- Call Setup Form -->
+                    <div class="call-setup" id="callSetupForm">
+                        <h4>Quick Health Assessment</h4>
+                        <p>Before connecting with the AI assistant, please provide some basic information:</p>
+                        
+                        <div class="form-group">
+                            <label>Primary Symptoms or Concerns</label>
+                            <textarea id="callSymptoms" rows="3" placeholder="Describe your symptoms or health concerns..."></textarea>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Urgency Level</label>
+                            <select id="callUrgency">
+                                <option value="normal">Normal - General consultation</option>
+                                <option value="moderate">Moderate - Concerning symptoms</option>
+                                <option value="high">High - Urgent medical attention needed</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label>Duration of Symptoms</label>
+                            <select id="callDuration">
+                                <option value="new">Just started (less than 24 hours)</option>
+                                <option value="recent">Recent (1-7 days)</option>
+                                <option value="ongoing">Ongoing (more than a week)</option>
+                                <option value="chronic">Chronic (ongoing condition)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="call-setup-actions">
+                            <button class="btn btn-outline" onclick="closeAICallModal()">Cancel</button>
+                            <button class="btn btn-success" onclick="startAICall()">
+                                <i class="fas fa-phone"></i>
+                                Start AI Call
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Call Interface (Hidden initially) -->
+                    <div class="call-interface" id="activeCallInterface" style="display: none;">
+                        <div class="call-status-display">
+                            <div class="call-animation">
+                                <div class="call-pulse"></div>
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <h4 id="callStatusText">AI Assistant is analyzing your symptoms...</h4>
+                            <p id="callStatusSubtext">Please wait while our AI processes your information</p>
+                        </div>
+                        
+                        <div class="call-progress">
+                            <div class="progress-bar">
+                                <div class="progress-fill" id="callProgress"></div>
+                            </div>
+                            <span class="progress-text" id="callProgressText">0% Complete</span>
+                        </div>
+                        
+                        <div class="call-actions">
+                            <button class="btn btn-outline" onclick="endAICall()">
+                                <i class="fas fa-phone-slash"></i>
+                                End Call
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Call Results (Hidden initially) -->
+                    <div class="call-results" id="callResults" style="display: none;">
+                        <div class="results-header">
+                            <i class="fas fa-check-circle success"></i>
+                            <h4>AI Assessment Complete</h4>
+                        </div>
+                        
+                        <div class="results-content">
+                            <div class="result-section">
+                                <h5>Preliminary Assessment</h5>
+                                <div class="assessment-summary" id="assessmentSummary">
+                                    <!-- AI assessment results will be populated here -->
+                                </div>
+                            </div>
+                            
+                            <div class="result-section">
+                                <h5>Recommendations</h5>
+                                <ul class="recommendations" id="aiRecommendations">
+                                    <!-- AI recommendations will be populated here -->
+                                </ul>
+                            </div>
+                            
+                            <div class="result-section">
+                                <h5>Next Steps</h5>
+                                <div class="next-steps" id="nextSteps">
+                                    <!-- Next steps will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="results-actions">
+                            <button class="btn btn-outline" onclick="saveAIReport()">
+                                <i class="fas fa-download"></i>
+                                Save Report
+                            </button>
+                            <button class="btn btn-secondary" onclick="shareAIReport()">
+                                <i class="fas fa-share"></i>
+                                Share with Doctor
+                            </button>
+                            <button class="btn btn-primary" onclick="bookAppointmentFromAI()">
+                                <i class="fas fa-calendar-plus"></i>
+                                Book Appointment
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Appointment Booking Modal -->
+    <div class="modal" id="bookingModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Book Appointment</h3>
+                <button class="modal-close" onclick="closeBookingModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="booking-form">
+                    <div class="selected-slot-info" id="selectedSlotInfo">
+                        <!-- Selected slot information will be displayed here -->
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Reason for Appointment</label>
+                        <textarea id="appointmentReason" rows="3" placeholder="Describe your health concern or reason for visit..."></textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Appointment Type</label>
+                        <select id="appointmentType">
+                            <option value="consultation">General Consultation</option>
+                            <option value="follow_up">Follow-up Visit</option>
+                            <option value="routine_checkup">Routine Checkup</option>
+                            <option value="emergency">Emergency Consultation</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Additional Notes (Optional)</label>
+                        <textarea id="appointmentNotes" rows="2" placeholder="Any additional information for the doctor..."></textarea>
+                    </div>
+                    
+                    <div class="booking-summary">
+                        <div class="summary-item">
+                            <span class="label">Consultation Fee:</span>
+                            <span class="value" id="consultationFee">₹500</span>
+                        </div>
+                        <div class="summary-item">
+                            <span class="label">Registration Fee:</span>
+                            <span class="value" id="registrationFee">₹200</span>
+                        </div>
+                        <div class="summary-item total">
+                            <span class="label">Total Amount:</span>
+                            <span class="value" id="totalAmount">₹700</span>
+                        </div>
+                    </div>
+                    
+                    <div class="booking-actions">
+                        <button class="btn btn-outline" onclick="closeBookingModal()">Cancel</button>
+                        <button class="btn btn-primary" onclick="confirmBooking()">
+                            <i class="fas fa-check"></i>
+                            Confirm Booking
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

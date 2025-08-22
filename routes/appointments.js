@@ -147,6 +147,12 @@ router.post('/book', authenticateToken, [
         }
 
         // Create appointment
+        console.log('Creating appointment with fees:', {
+            consultationFee: doctor.consultationFee,
+            registrationFee: doctor.registrationFee,
+            calculatedTotal: (doctor.consultationFee || 0) + (doctor.registrationFee || 0)
+        });
+        
         const appointment = new Appointment({
             doctor: doctorId,
             patient: patientId,
@@ -157,7 +163,8 @@ router.post('/book', authenticateToken, [
             notes,
             symptoms: symptoms || [],
             consultationFee: doctor.consultationFee,
-            registrationFee: doctor.registrationFee
+            registrationFee: doctor.registrationFee || 0,
+            totalAmount: (doctor.consultationFee || 0) + (doctor.registrationFee || 0)
         });
 
         await appointment.save();
@@ -229,7 +236,7 @@ router.get('/patient', authenticateToken, async (req, res) => {
         const skip = (page - 1) * limit;
 
         const appointments = await Appointment.find(query)
-            .populate('doctor', 'firstName lastName specialization clinicName')
+            .populate('doctor', '_id firstName lastName specialization clinicName')
             .sort({ appointmentDate: -1, appointmentTime: -1 })
             .skip(skip)
             .limit(parseInt(limit));
@@ -511,6 +518,253 @@ router.get('/:appointmentId', authenticateToken, async (req, res) => {
 
     } catch (error) {
         console.error('Get appointment details error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Get doctor's weekly schedule
+router.get('/doctor/schedule', authenticateToken, async (req, res) => {
+    try {
+        // Verify user is a doctor
+        if (req.user.userType !== 'doctor') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        const doctorId = req.user.userId;
+        const doctor = await Doctor.findById(doctorId);
+        
+        if (!doctor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Doctor not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Weekly schedule retrieved successfully',
+            data: {
+                schedule: doctor.clinicTimings
+            }
+        });
+
+    } catch (error) {
+        console.error('Get doctor schedule error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Update doctor's weekly schedule
+router.put('/doctor/schedule', authenticateToken, async (req, res) => {
+    try {
+        // Verify user is a doctor
+        if (req.user.userType !== 'doctor') {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied'
+            });
+        }
+
+        const doctorId = req.user.userId;
+        const { schedule } = req.body;
+        
+        const doctor = await Doctor.findByIdAndUpdate(
+            doctorId, 
+            { clinicTimings: schedule },
+            { new: true, runValidators: true }
+        );
+        
+        if (!doctor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Doctor not found'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Weekly schedule updated successfully',
+            data: {
+                schedule: doctor.clinicTimings
+            }
+        });
+
+    } catch (error) {
+        console.error('Update doctor schedule error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Get weekly slots for a doctor (for patient view)
+router.get('/weekly-slots/:doctorId', async (req, res) => {
+    try {
+        const { doctorId } = req.params;
+        const { startDate } = req.query; // Optional: start of the week
+
+        // Validate doctor exists
+        const doctor = await Doctor.findById(doctorId);
+        if (!doctor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Doctor not found'
+            });
+        }
+
+        // Check if doctor is verified
+        if (doctor.verificationStatus !== 'approved') {
+            return res.status(400).json({
+                success: false,
+                message: 'Doctor is not verified yet'
+            });
+        }
+
+        // Calculate week dates
+        const start = startDate ? new Date(startDate) : new Date();
+        const weekDays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+        const weekSlots = {};
+
+        for (let i = 0; i < 7; i++) {
+            const currentDate = new Date(start);
+            currentDate.setDate(start.getDate() + i);
+            const dayName = weekDays[currentDate.getDay()];
+            const dateString = currentDate.toISOString().split('T')[0];
+            
+            const availableSlots = await Appointment.getAvailableSlots(doctorId, dateString);
+            
+            weekSlots[dayName] = {
+                date: dateString,
+                dayName: dayName,
+                displayDate: currentDate.toLocaleDateString(),
+                slots: availableSlots
+            };
+        }
+
+        res.json({
+            success: true,
+            message: 'Weekly slots retrieved successfully',
+            data: {
+                doctor: {
+                    id: doctor._id,
+                    name: doctor.fullName,
+                    specialization: doctor.specialization,
+                    clinicName: doctor.clinicName,
+                    consultationFee: doctor.consultationFee,
+                    registrationFee: doctor.registrationFee,
+                    rating: doctor.rating
+                },
+                weekSlots
+            }
+        });
+
+    } catch (error) {
+        console.error('Get weekly slots error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Initiate AI call with doctor
+router.post('/ai-call/:doctorId', authenticateToken, async (req, res) => {
+    try {
+        // Verify user is a patient
+        if (req.user.userType !== 'patient') {
+            return res.status(403).json({
+                success: false,
+                message: 'Only patients can initiate AI calls'
+            });
+        }
+
+        const { doctorId } = req.params;
+        const patientId = req.user.userId;
+        const { symptoms, urgency = 'normal' } = req.body;
+
+        // Validate doctor exists
+        const doctor = await Doctor.findById(doctorId);
+        if (!doctor) {
+            return res.status(404).json({
+                success: false,
+                message: 'Doctor not found'
+            });
+        }
+
+        // Validate patient exists
+        const patient = await Patient.findById(patientId);
+        if (!patient) {
+            return res.status(404).json({
+                success: false,
+                message: 'Patient not found'
+            });
+        }
+
+        // Check if doctor is verified
+        if (doctor.verificationStatus !== 'approved') {
+            return res.status(400).json({
+                success: false,
+                message: 'Doctor is not verified yet'
+            });
+        }
+
+        // Generate a unique call session ID
+        const callSessionId = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        
+        // For now, we'll simulate AI call setup
+        // In a real implementation, this would integrate with AI calling service
+        const callSession = {
+            sessionId: callSessionId,
+            doctor: {
+                id: doctor._id,
+                name: doctor.fullName,
+                specialization: doctor.specialization,
+                clinicName: doctor.clinicName
+            },
+            patient: {
+                id: patient._id,
+                name: patient.fullName,
+                age: patient.age
+            },
+            symptoms: symptoms || [],
+            urgency,
+            status: 'initiated',
+            createdAt: new Date(),
+            // Mock AI call URL - in production this would be a real AI service endpoint
+            callUrl: `https://ai-call-service.com/session/${callSessionId}`,
+            estimatedDuration: 15 // minutes
+        };
+
+        res.json({
+            success: true,
+            message: 'AI call session initiated successfully',
+            data: {
+                callSession,
+                instructions: [
+                    'Your AI call session has been set up',
+                    'The AI will conduct a preliminary assessment',
+                    'Based on the results, you may be recommended to book an appointment',
+                    'This call is for initial screening only'
+                ]
+            }
+        });
+
+    } catch (error) {
+        console.error('AI call initiation error:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',

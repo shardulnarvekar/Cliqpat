@@ -26,8 +26,8 @@ const appointmentSchema = new mongoose.Schema({
     },
     duration: {
         type: Number,
-        default: 30, // minutes
-        min: [15, 'Duration must be at least 15 minutes'],
+        default: 60, // minutes (1 hour slots)
+        min: [30, 'Duration must be at least 30 minutes'],
         max: [120, 'Duration cannot exceed 2 hours']
     },
     
@@ -175,14 +175,22 @@ appointmentSchema.index({ appointmentDate: 1, appointmentTime: 1 });
 
 // Pre-save middleware to calculate total amount
 appointmentSchema.pre('save', function(next) {
-    this.totalAmount = this.consultationFee + this.registrationFee;
+    console.log('Pre-save middleware - consultationFee:', this.consultationFee, 'registrationFee:', this.registrationFee);
+    
+    // Ensure both fees are numbers
+    const consultationFee = Number(this.consultationFee) || 0;
+    const registrationFee = Number(this.registrationFee) || 0;
+    
+    this.totalAmount = consultationFee + registrationFee;
+    console.log('Pre-save middleware - calculated totalAmount:', this.totalAmount);
+    
     next();
 });
 
 // Static method to check availability
-appointmentSchema.statics.checkAvailability = async function(doctorId, date, time, duration = 30) {
+appointmentSchema.statics.checkAvailability = async function(doctorId, date, time, duration = 60) {
     const appointmentDate = new Date(date);
-    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     
     // Check if doctor is available on this day
     const doctor = await mongoose.model('Doctor').findById(doctorId);
@@ -190,48 +198,38 @@ appointmentSchema.statics.checkAvailability = async function(doctorId, date, tim
         return { available: false, reason: 'Clinic is closed on this day/time' };
     }
     
-    // Check for conflicting appointments
+    // Check for conflicting appointments at the exact time
     const conflictingAppointments = await this.find({
         doctor: doctorId,
         appointmentDate: appointmentDate,
         status: { $in: ['scheduled', 'confirmed'] },
-        $or: [
-            {
-                appointmentTime: time,
-                duration: { $exists: true }
-            },
-            {
-                appointmentTime: { $lt: time }
-            }
-        ]
+        appointmentTime: time
     });
-
-    // Additional check for overlapping appointments with duration
-    if (conflictingAppointments.length === 0) {
-        // Check for appointments that might overlap due to duration
-        const overlappingAppointments = await this.find({
-            doctor: doctorId,
-            appointmentDate: appointmentDate,
-            status: { $in: ['scheduled', 'confirmed'] },
-            appointmentTime: { $lt: time }
-        });
-
-        // Check if any existing appointment's end time overlaps with the new appointment start time
-        for (const appointment of overlappingAppointments) {
-            if (appointment.duration) {
-                const appointmentStart = new Date(`${appointment.appointmentDate.toISOString().split('T')[0]}T${appointment.appointmentTime}`);
-                const appointmentEnd = new Date(appointmentStart.getTime() + (appointment.duration * 60000)); // duration in milliseconds
-                const newAppointmentStart = new Date(`${appointmentDate.toISOString().split('T')[0]}T${time}`);
-                
-                if (appointmentEnd > newAppointmentStart) {
-                    return { available: false, reason: 'Time slot overlaps with existing appointment' };
-                }
-            }
-        }
-    }
     
     if (conflictingAppointments.length > 0) {
         return { available: false, reason: 'Time slot is already booked' };
+    }
+    
+    // Check for overlapping appointments with duration
+    const overlappingAppointments = await this.find({
+        doctor: doctorId,
+        appointmentDate: appointmentDate,
+        status: { $in: ['scheduled', 'confirmed'] }
+    });
+
+    // Check if any existing appointment overlaps with the new appointment
+    for (const appointment of overlappingAppointments) {
+        if (appointment.duration) {
+            const appointmentStart = new Date(`${appointment.appointmentDate.toISOString().split('T')[0]}T${appointment.appointmentTime}`);
+            const appointmentEnd = new Date(appointmentStart.getTime() + (appointment.duration * 60000)); // duration in milliseconds
+            const newAppointmentStart = new Date(`${appointmentDate.toISOString().split('T')[0]}T${time}`);
+            const newAppointmentEnd = new Date(newAppointmentStart.getTime() + (duration * 60000));
+            
+            // Check if appointments overlap
+            if ((newAppointmentStart < appointmentEnd) && (newAppointmentEnd > appointmentStart)) {
+                return { available: false, reason: 'Time slot overlaps with existing appointment' };
+            }
+        }
     }
     
     return { available: true };
@@ -243,7 +241,7 @@ appointmentSchema.statics.getAvailableSlots = async function(doctorId, date) {
     if (!doctor) return [];
     
     const appointmentDate = new Date(date);
-    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'lowercase' });
+    const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
     const daySchedule = doctor.clinicTimings[dayOfWeek];
     
     if (!daySchedule || !daySchedule.isOpen) return [];
@@ -251,27 +249,52 @@ appointmentSchema.statics.getAvailableSlots = async function(doctorId, date) {
     const slots = [];
     const startTime = new Date(`2000-01-01 ${daySchedule.start}`);
     const endTime = new Date(`2000-01-01 ${daySchedule.end}`);
-    const slotDuration = 30; // 30 minutes per slot
+    const slotDuration = daySchedule.slotDuration || 60; // Use doctor's preferred slot duration (default 60 minutes)
+    
+    // Parse break time if exists
+    let breakStart = null;
+    let breakEnd = null;
+    if (daySchedule.breakTime && daySchedule.breakTime.start && daySchedule.breakTime.end) {
+        breakStart = new Date(`2000-01-01 ${daySchedule.breakTime.start}`);
+        breakEnd = new Date(`2000-01-01 ${daySchedule.breakTime.end}`);
+    }
     
     let currentTime = new Date(startTime);
     
     while (currentTime < endTime) {
         const timeString = currentTime.toTimeString().slice(0, 5);
         
-        // Check if this slot is available
-        const isAvailable = await this.checkAvailability(doctorId, date, timeString, slotDuration);
+        // Check if current slot is during break time
+        let isDuringBreak = false;
+        if (breakStart && breakEnd) {
+            const slotEndTime = new Date(currentTime.getTime() + (slotDuration * 60000));
+            isDuringBreak = (currentTime >= breakStart && currentTime < breakEnd) || 
+                           (slotEndTime > breakStart && slotEndTime <= breakEnd);
+        }
         
-        if (isAvailable.available) {
-            slots.push({
-                time: timeString,
-                available: true
-            });
-        } else {
+        if (isDuringBreak) {
             slots.push({
                 time: timeString,
                 available: false,
-                reason: isAvailable.reason
+                reason: 'Break time'
             });
+        } else {
+            // Check if this slot is available
+            const isAvailable = await this.checkAvailability(doctorId, date, timeString, slotDuration);
+            
+            if (isAvailable.available) {
+                slots.push({
+                    time: timeString,
+                    available: true,
+                    duration: slotDuration
+                });
+            } else {
+                slots.push({
+                    time: timeString,
+                    available: false,
+                    reason: isAvailable.reason
+                });
+            }
         }
         
         currentTime.setMinutes(currentTime.getMinutes() + slotDuration);

@@ -74,6 +74,12 @@
                         </a>
                     </li>
                     <li>
+                        <a href="#schedule">
+                            <i class="fas fa-calendar-week"></i>
+                            <span>Weekly Schedule</span>
+                        </a>
+                    </li>
+                    <li>
                         <a href="#analytics">
                             <i class="fas fa-chart-line"></i>
                             <span>Analytics</span>
@@ -299,34 +305,17 @@
                     </div>
                 </div>
 
-                <!-- Today's Appointments -->
-                <div class="today-appointments">
-                    <h2>Today's Appointments</h2>
+                <!-- Appointments List -->
+                <div class="appointments-section">
+                    <div class="section-header-row">
+                        <h2>All Appointments</h2>
+                        <button class="btn btn-outline" onclick="refreshDoctorAppointments()">
+                            <i class="fas fa-sync-alt"></i>
+                            Refresh
+                        </button>
+                    </div>
                     <div class="appointments-list">
-                        <div class="appointment-item">
-                            <div class="appointment-time">
-                                <span class="time">09:00 - 09:30</span>
-                                <span class="status confirmed">Confirmed</span>
-                            </div>
-                            <div class="appointment-details">
-                                <h4>Mr. John Doe</h4>
-                                <p>Follow-up consultation</p>
-                                <div class="appointment-notes">
-                                    <span class="ai-report">AI Report Available</span>
-                                    <span class="ehr">EHR Updated</span>
-                                </div>
-                            </div>
-                            <div class="appointment-actions">
-                                <button class="btn btn-outline" onclick="rescheduleAppointment(1)">
-                                    <i class="fas fa-calendar-alt"></i>
-                                    Reschedule
-                                </button>
-                                <button class="btn btn-primary" onclick="startConsultation(1)">
-                                    <i class="fas fa-play"></i>
-                                    Start
-                                </button>
-                            </div>
-                        </div>
+                        <p class="no-data">Loading appointments...</p>
                     </div>
                 </div>
             </section>
@@ -471,6 +460,380 @@
                                 <i class="fas fa-print"></i>
                                 Print
                             </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Weekly Schedule Section -->
+            <section id="schedule" class="dashboard-section">
+                <div class="section-header">
+                    <h1>Weekly Schedule Management</h1>
+                    <p>Configure your weekly clinic timings and availability</p>
+                </div>
+
+                <!-- Schedule Overview -->
+                <div class="schedule-overview">
+                    <div class="overview-card">
+                        <h3>Current Week</h3>
+                        <p id="currentWeekRange">Dec 16 - Dec 22, 2024</p>
+                    </div>
+                    <div class="overview-card">
+                        <h3>Total Available Slots</h3>
+                        <p id="totalSlots">35 slots</p>
+                    </div>
+                    <div class="overview-card">
+                        <h3>Booked Appointments</h3>
+                        <p id="bookedSlots">18 slots</p>
+                    </div>
+                    <div class="overview-card">
+                        <h3>Available Slots</h3>
+                        <p id="availableSlots">17 slots</p>
+                    </div>
+                </div>
+
+                <!-- Schedule Configuration -->
+                <div class="schedule-config">
+                    <div class="config-header">
+                        <h2>Configure Weekly Schedule</h2>
+                        <div class="config-actions">
+                            <button class="btn btn-outline" onclick="resetSchedule()">Reset to Default</button>
+                            <button class="btn btn-primary" onclick="saveSchedule()">
+                                <i class="fas fa-save"></i>
+                                Save Schedule
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Weekly Schedule Form -->
+                    <div class="weekly-schedule" id="weeklyScheduleForm">
+                        <!-- Monday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Monday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="monday-open" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="monday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="monday-end" value="18:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="monday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="monday-break-start" value="13:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="monday-break-end" value="14:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tuesday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Tuesday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="tuesday-open" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="tuesday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="tuesday-end" value="18:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="tuesday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="tuesday-break-start" value="13:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="tuesday-break-end" value="14:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Wednesday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Wednesday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="wednesday-open" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="wednesday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="wednesday-end" value="18:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="wednesday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="wednesday-break-start" value="13:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="wednesday-break-end" value="14:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Thursday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Thursday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="thursday-open" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="thursday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="thursday-end" value="18:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="thursday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="thursday-break-start" value="13:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="thursday-break-end" value="14:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Friday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Friday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="friday-open" checked>
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="friday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="friday-end" value="18:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="friday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="friday-break-start" value="13:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="friday-break-end" value="14:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Saturday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Saturday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="saturday-open">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="saturday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="saturday-end" value="15:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="saturday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="saturday-break-start" value="12:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="saturday-break-end" value="13:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sunday -->
+                        <div class="day-schedule">
+                            <div class="day-header">
+                                <h3>Sunday</h3>
+                                <div class="day-toggle">
+                                    <label class="switch">
+                                        <input type="checkbox" id="sunday-open">
+                                        <span class="slider"></span>
+                                    </label>
+                                    <span>Open</span>
+                                </div>
+                            </div>
+                            <div class="day-config">
+                                <div class="time-inputs">
+                                    <div class="form-group">
+                                        <label>Start Time</label>
+                                        <input type="time" id="sunday-start" value="09:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>End Time</label>
+                                        <input type="time" id="sunday-end" value="15:00">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Slot Duration (mins)</label>
+                                        <select id="sunday-duration">
+                                            <option value="30">30 minutes</option>
+                                            <option value="60" selected>60 minutes</option>
+                                            <option value="90">90 minutes</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="break-time">
+                                    <h4>Break Time</h4>
+                                    <div class="break-inputs">
+                                        <div class="form-group">
+                                            <label>Break Start</label>
+                                            <input type="time" id="sunday-break-start" value="12:00">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Break End</label>
+                                            <input type="time" id="sunday-break-end" value="13:00">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

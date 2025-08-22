@@ -83,39 +83,74 @@ const doctorSchema = new mongoose.Schema({
     // Clinic Timings
     clinicTimings: {
         monday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: true }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '18:00' },
+            isOpen: { type: Boolean, default: true },
+            slotDuration: { type: Number, default: 60 }, // minutes
+            breakTime: {
+                start: { type: String, default: '13:00' },
+                end: { type: String, default: '14:00' }
+            }
         },
         tuesday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: true }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '18:00' },
+            isOpen: { type: Boolean, default: true },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '13:00' },
+                end: { type: String, default: '14:00' }
+            }
         },
         wednesday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: true }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '18:00' },
+            isOpen: { type: Boolean, default: true },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '13:00' },
+                end: { type: String, default: '14:00' }
+            }
         },
         thursday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: true }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '18:00' },
+            isOpen: { type: Boolean, default: true },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '13:00' },
+                end: { type: String, default: '14:00' }
+            }
         },
         friday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: true }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '18:00' },
+            isOpen: { type: Boolean, default: true },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '13:00' },
+                end: { type: String, default: '14:00' }
+            }
         },
         saturday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: false }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '15:00' },
+            isOpen: { type: Boolean, default: false },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '12:00' },
+                end: { type: String, default: '13:00' }
+            }
         },
         sunday: {
-            start: String,
-            end: String,
-            isOpen: { type: Boolean, default: false }
+            start: { type: String, default: '09:00' },
+            end: { type: String, default: '15:00' },
+            isOpen: { type: Boolean, default: false },
+            slotDuration: { type: Number, default: 60 },
+            breakTime: {
+                start: { type: String, default: '12:00' },
+                end: { type: String, default: '13:00' }
+            }
         }
     },
     

@@ -219,6 +219,10 @@ async function handlePatientRegistration(e) {
             state: formData.get('state'),
             pincode: formData.get('pincode')
         },
+        // Also include separate city, state, pincode for backend validation
+        city: formData.get('city'),
+        state: formData.get('state'),
+        pincode: formData.get('pincode'),
         bloodGroup: formData.get('bloodGroup') || '',
         emergencyContact: {
             name: formData.get('emergencyContact'),
@@ -244,6 +248,9 @@ async function handlePatientRegistration(e) {
     // Show loading state
     showLoadingModal();
     
+    // Debug: Log the registration data being sent
+    console.log('Patient registration data:', JSON.stringify(registrationData, null, 2));
+    
     try {
         const response = await fetch('/api/auth/patient/register', {
             method: 'POST',
@@ -254,6 +261,10 @@ async function handlePatientRegistration(e) {
         });
 
         const data = await response.json();
+        
+        // Debug: Log the response
+        console.log('Registration response status:', response.status);
+        console.log('Registration response data:', JSON.stringify(data, null, 2));
         
         if (response.ok && data.success) {
             hideLoadingModal();
@@ -270,7 +281,16 @@ async function handlePatientRegistration(e) {
             showSuccessModal();
         } else {
             hideLoadingModal();
-            showNotification(data.message || 'Registration failed', 'error');
+            
+            // Show detailed error information
+            let errorMessage = data.message || 'Registration failed';
+            if (data.errors && data.errors.length > 0) {
+                const errorDetails = data.errors.map(err => `${err.path || err.param || 'Field'}: ${err.msg || err.message}`).join('\n');
+                errorMessage += '\n\nDetails:\n' + errorDetails;
+            }
+            
+            console.error('Registration failed:', errorMessage);
+            showNotification(errorMessage, 'error');
         }
     } catch (error) {
         console.error('Registration error:', error);
