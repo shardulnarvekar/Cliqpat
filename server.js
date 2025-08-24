@@ -34,12 +34,25 @@ const authRoutes = require('./routes/auth');
 const patientRoutes = require('./routes/patients');
 const doctorRoutes = require('./routes/doctors');
 const appointmentRoutes = require('./routes/appointments');
+const ehrRoutes = require('./routes/ehr');
+const webhookRoutes = require('./routes/webhook');
+
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!require('fs').existsSync(uploadsDir)) {
+    require('fs').mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Serve uploaded files (with authentication middleware would be better in production)
+app.use('/uploads', express.static(uploadsDir));
 
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/doctors', doctorRoutes);
 app.use('/api/appointments', appointmentRoutes);
+app.use('/api/ehr', ehrRoutes);
+app.use('/api/webhook', webhookRoutes);
 
 // Serve frontend routes
 app.get('*', (req, res) => {

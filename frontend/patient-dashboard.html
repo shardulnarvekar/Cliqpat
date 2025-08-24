@@ -15,8 +15,9 @@
     <nav class="navbar dashboard-nav">
         <div class="nav-container">
             <div class="nav-logo">
-                <i class="fas fa-heartbeat"></i>
-                <span>Cliqpat</span>
+                <a href="index.html">
+                    <img src="images/logo.png" alt="Cliqpat Logo" class="logo-image">
+                </a>
             </div>
             <div class="nav-user">
                 <div class="user-info">
@@ -214,6 +215,10 @@
                 <div class="search-filters">
                     <div class="filter-row">
                         <div class="filter-group">
+                            <label>Doctor Name</label>
+                            <input type="text" placeholder="Search by doctor name" id="doctorNameSearch">
+                        </div>
+                        <div class="filter-group">
                             <label>Location</label>
                             <input type="text" placeholder="Enter city or area" id="locationSearch">
                         </div>
@@ -240,6 +245,10 @@
                         <button class="btn btn-primary" onclick="searchClinics()">
                             <i class="fas fa-search"></i>
                             Search
+                        </button>
+                        <button class="btn btn-outline" onclick="clearSearch()">
+                            <i class="fas fa-times"></i>
+                            Clear
                         </button>
                     </div>
                 </div>
@@ -789,14 +798,40 @@
                         <div class="upload-icon">
                             <i class="fas fa-cloud-upload-alt"></i>
                         </div>
-                        <h3>Upload Medical Records</h3>
-                        <p>Drag and drop files here or click to browse</p>
-                        <p class="upload-hint">Supported: PDF, JPG, PNG (Max 10MB per file)</p>
-                        <input type="file" id="healthRecords" multiple accept=".pdf,.jpg,.jpeg,.png" style="display: none;">
-                        <button type="button" class="btn btn-primary" onclick="document.getElementById('healthRecords').click()">
-                            <i class="fas fa-upload"></i>
-                            Choose Files
-                        </button>
+                        <h3>Upload EHR Documents</h3>
+                        <p>Upload your medical records, lab reports, and other health documents</p>
+                        <p class="upload-hint">Supported: PDF files only (Max 10MB per file)</p>
+                        
+                        <!-- EHR Upload Form -->
+                        <form id="ehrUploadForm" enctype="multipart/form-data">
+                            <div class="form-group">
+                                <label for="ehrTitle">Document Title</label>
+                                <input type="text" id="ehrTitle" name="title" placeholder="e.g., Blood Test Report, X-Ray Results" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="ehrDescription">Description (Optional)</label>
+                                <textarea id="ehrDescription" name="description" placeholder="Brief description of the document"></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label for="ehrAppointment">Link to Appointment (Optional)</label>
+                                <select id="ehrAppointment" name="appointmentId">
+                                    <option value="">Select Appointment</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ehrDocument">Select PDF File</label>
+                                <input type="file" id="ehrDocument" name="ehrDocument" accept=".pdf" style="display: none;" required>
+                                <button type="button" class="btn btn-secondary" onclick="document.getElementById('ehrDocument').click()">
+                                    <i class="fas fa-file-pdf"></i>
+                                    Choose PDF File
+                                </button>
+                                <span id="selectedFileName" class="selected-file-name"></span>
+                            </div>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-upload"></i>
+                                Upload Document
+                            </button>
+                        </form>
                     </div>
                 </div>
 
@@ -804,16 +839,25 @@
                 <div class="records-categories">
                     <div class="category-tabs">
                         <button class="category-tab active" onclick="showCategory('all')">All Records</button>
-                        <button class="category-tab" onclick="showCategory('reports')">Lab Reports</button>
-                        <button class="category-tab" onclick="showCategory('prescriptions')">Prescriptions</button>
+                        <button class="category-tab" onclick="showCategory('ehr_document')">EHR Documents</button>
+                        <button class="category-tab" onclick="showCategory('lab_report')">Lab Reports</button>
+                        <button class="category-tab" onclick="showCategory('prescription')">Prescriptions</button>
                         <button class="category-tab" onclick="showCategory('imaging')">Imaging</button>
-                        <button class="category-tab" onclick="showCategory('vaccinations')">Vaccinations</button>
+                        <button class="category-tab" onclick="showCategory('vaccination')">Vaccinations</button>
                     </div>
                 </div>
 
                 <!-- Records Grid -->
                 <div class="records-grid" id="recordsGrid">
                     <!-- Record cards will be populated here -->
+                </div>
+
+                <!-- EHR Documents List -->
+                <div class="ehr-documents-section">
+                    <h3>Uploaded EHR Documents</h3>
+                    <div id="ehrDocumentsList" class="ehr-documents-grid">
+                        <!-- EHR documents will be loaded here dynamically -->
+                    </div>
                 </div>
             </section>
 
@@ -911,36 +955,46 @@
             <section id="reports" class="dashboard-section">
                 <div class="section-header">
                     <h1>Health Reports</h1>
-                    <p>View and analyze your health data</p>
+                    <p>View and analyze your health data and uploaded documents</p>
                 </div>
 
-                <!-- Reports Overview -->
-                <div class="reports-overview">
-                    <div class="report-card">
-                        <div class="report-header">
-                            <h3>Blood Pressure</h3>
-                            <span class="report-status normal">Normal</span>
-                        </div>
-                        <div class="report-chart">
-                            <canvas id="bpChart"></canvas>
-                        </div>
-                        <div class="report-summary">
-                            <p>Average: 120/80 mmHg</p>
-                            <p>Last reading: 118/78 mmHg</p>
-                        </div>
+                <!-- EHR Documents in Reports -->
+                <div class="reports-section">
+                    <h3>Electronic Health Records</h3>
+                    <div id="ehrReportsList" class="reports-grid">
+                        <!-- EHR documents will be loaded here dynamically -->
                     </div>
+                </div>
 
-                    <div class="report-card">
-                        <div class="report-header">
-                            <h3>Blood Sugar</h3>
-                            <span class="report-status normal">Normal</span>
+                <!-- Health Metrics Overview -->
+                <div class="reports-overview">
+                    <h3>Health Metrics</h3>
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h4>Blood Pressure</h4>
+                                <span class="metric-status normal">Normal</span>
+                            </div>
+                            <div class="metric-value">120/80 mmHg</div>
+                            <div class="metric-trend">↗️ +2 from last week</div>
                         </div>
-                        <div class="report-chart">
-                            <canvas id="sugarChart"></canvas>
+
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h4>Blood Sugar</h4>
+                                <span class="metric-status normal">Normal</span>
+                            </div>
+                            <div class="metric-value">95 mg/dL</div>
+                            <div class="metric-trend">↘️ -3 from last week</div>
                         </div>
-                        <div class="report-summary">
-                            <p>Average: 95 mg/dL</p>
-                            <p>Last reading: 92 mg/dL</p>
+
+                        <div class="metric-card">
+                            <div class="metric-header">
+                                <h4>Weight</h4>
+                                <span class="metric-status normal">Stable</span>
+                            </div>
+                            <div class="metric-value">70 kg</div>
+                            <div class="metric-trend">→ No change</div>
                         </div>
                     </div>
                 </div>
@@ -1209,7 +1263,47 @@
         </div>
     </div>
 
-    <script src="js/main.js"></script>
+    <!-- ElevenLabs Widget Script - Load FIRST -->
+    <script src="https://unpkg.com/@elevenlabs/convai-widget-embed" type="module"></script>
+    
+    <!-- Alternative ElevenLabs CDN -->
+    <script>
+        // Load ElevenLabs widget with multiple fallbacks
+        if (typeof window.customElements === 'undefined') {
+            console.warn('⚠️ Custom elements not supported, loading polyfill...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@webcomponents/webcomponentsjs@2.4.3/webcomponents-loader.js';
+            document.head.appendChild(script);
+        }
+        
+        // Test ElevenLabs widget availability
+        function testElevenLabsWidget() {
+            try {
+                const testWidget = document.createElement('elevenlabs-convai');
+                testWidget.setAttribute('agent-id', 'agent_4001k36rkyn0e248jz1tqyx1r6es');
+                console.log('✅ ElevenLabs widget element can be created');
+                return true;
+            } catch (error) {
+                console.warn('⚠️ ElevenLabs widget creation failed:', error);
+                return false;
+            }
+        }
+        
+        // Wait for DOM and test widget
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(() => {
+                const isWorking = testElevenLabsWidget();
+                console.log('🧪 ElevenLabs widget test result:', isWorking ? '✅ Working' : '❌ Failed');
+            }, 1000);
+        });
+        
+        window.elevenLabsWidgetAvailable = false;
+        setTimeout(() => {
+            window.elevenLabsWidgetAvailable = testElevenLabsWidget();
+        }, 2000);
+    </script>
+
+    <!-- Scripts -->
     <script src="js/dashboard.js"></script>
 </body>
 </html>

@@ -6,17 +6,34 @@ const router = express.Router();
 router.get('/search', async (req, res) => {
     try {
         const {
+            name,
             specialization,
             city,
             state,
             experience,
             rating,
             page = 1,
-            limit = 10
+            limit = 50
         } = req.query;
 
         // Build query
         const query = { verificationStatus: 'approved', isActive: true };
+        
+        if (name) {
+            // Search by doctor name (firstName, lastName, or full name)
+            const nameRegex = { $regex: name, $options: 'i' };
+            query.$or = [
+                { firstName: nameRegex },
+                { lastName: nameRegex },
+                { $expr: {
+                    $regexMatch: {
+                        input: { $concat: ['$firstName', ' ', '$lastName'] },
+                        regex: name,
+                        options: 'i'
+                    }
+                }}
+            ];
+        }
         
         if (specialization) {
             query.specialization = specialization;

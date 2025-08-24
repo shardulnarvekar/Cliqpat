@@ -103,11 +103,14 @@ const patientSchema = new mongoose.Schema({
     medicalRecords: [{
         type: {
             type: String,
-            enum: ['lab_report', 'prescription', 'imaging', 'vaccination', 'other']
+            enum: ['lab_report', 'prescription', 'imaging', 'vaccination', 'ehr_document', 'other']
         },
         title: String,
         description: String,
         fileUrl: String,
+        fileName: String,
+        fileSize: Number,
+        mimeType: String,
         uploadDate: {
             type: Date,
             default: Date.now
@@ -115,6 +118,14 @@ const patientSchema = new mongoose.Schema({
         doctor: {
             type: mongoose.Schema.Types.ObjectId,
             ref: 'Doctor'
+        },
+        appointment: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Appointment'
+        },
+        isEHRDocument: {
+            type: Boolean,
+            default: false
         }
     }],
     

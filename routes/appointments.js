@@ -164,7 +164,8 @@ router.post('/book', authenticateToken, [
             symptoms: symptoms || [],
             consultationFee: doctor.consultationFee,
             registrationFee: doctor.registrationFee || 0,
-            totalAmount: (doctor.consultationFee || 0) + (doctor.registrationFee || 0)
+            totalAmount: (doctor.consultationFee || 0) + (doctor.registrationFee || 0),
+            status: 'confirmed' // Set to confirmed immediately after booking
         });
 
         await appointment.save();
@@ -397,6 +398,103 @@ router.patch('/:appointmentId/status', authenticateToken, [
 
     } catch (error) {
         console.error('Update appointment status error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Something went wrong'
+        });
+    }
+});
+
+// Reschedule appointment
+router.patch('/:appointmentId/reschedule', authenticateToken, [
+    body('appointmentDate').isISO8601().withMessage('Valid appointment date is required'),
+    body('appointmentTime').matches(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/).withMessage('Valid appointment time is required')
+], async (req, res) => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array()
+            });
+        }
+
+        const { appointmentId } = req.params;
+        const { appointmentDate, appointmentTime, reason } = req.body;
+        const userId = req.user.userId;
+        const userType = req.user.userType;
+
+        // Find appointment
+        const appointment = await Appointment.findById(appointmentId);
+        if (!appointment) {
+            return res.status(404).json({
+                success: false,
+                message: 'Appointment not found'
+            });
+        }
+
+        // Check permissions
+        if (userType === 'doctor' && appointment.doctor.toString() !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only reschedule your own appointments'
+            });
+        }
+
+        if (userType === 'patient' && appointment.patient.toString() !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: 'You can only reschedule your own appointments'
+            });
+        }
+
+        // Check if appointment can be rescheduled
+        if (appointment.status === 'completed' || appointment.status === 'cancelled') {
+            return res.status(400).json({
+                success: false,
+                message: 'Cannot reschedule completed or cancelled appointments'
+            });
+        }
+
+        // Check availability for new slot
+        const availability = await Appointment.checkAvailability(appointment.doctor, appointmentDate, appointmentTime, appointmentId);
+        if (!availability.available) {
+            return res.status(400).json({
+                success: false,
+                message: availability.reason
+            });
+        }
+
+        // Update appointment
+        appointment.appointmentDate = new Date(appointmentDate);
+        appointment.appointmentTime = appointmentTime;
+        appointment.status = 'scheduled'; // Reset status to scheduled
+        if (reason) {
+            appointment.rescheduleReason = reason;
+        }
+        appointment.updatedAt = new Date();
+
+        await appointment.save();
+
+        res.json({
+            success: true,
+            message: 'Appointment rescheduled successfully',
+            data: {
+                appointment: {
+                    id: appointment._id,
+                    appointmentDate: appointment.appointmentDate,
+                    appointmentTime: appointment.appointmentTime,
+                    status: appointment.status,
+                    updatedAt: appointment.updatedAt
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Reschedule appointment error:', error);
         res.status(500).json({
             success: false,
             message: 'Internal server error',

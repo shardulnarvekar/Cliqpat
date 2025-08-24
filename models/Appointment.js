@@ -108,6 +108,58 @@ const appointmentSchema = new mongoose.Schema({
         followUpDate: Date,
         followUpReason: String
     },
+
+    // EHR Documents uploaded by patient for this appointment
+    ehrDocuments: [{
+        fileName: String,
+        originalName: String,
+        fileUrl: String,
+        fileSize: Number,
+        mimeType: String,
+        uploadDate: {
+            type: Date,
+            default: Date.now
+        }
+    }],
+
+    // AI Conversation Report
+    aiConversationReport: {
+        // Status of the AI report
+        status: {
+            type: String,
+            enum: ['pending', 'in_progress', 'completed', 'failed'],
+            default: 'pending'
+        },
+        // Raw conversation transcript from ElevenLabs
+        conversationTranscript: String,
+        // Generated summary/report using Gemini AI
+        generatedReport: String,
+        // Patient information extracted from conversation
+        extractedPatientInfo: {
+            appointment_id: String,
+            patient_name: String,
+            patient_age: Number,
+            patient_gender: String,
+            chief_complaint: String,
+            symptoms: [String],
+            duration_of_symptoms: String,
+            severity: {
+                type: String,
+                enum: ['mild', 'moderate', 'severe']
+            },
+            previous_medical_history: String,
+            current_medications: String,
+            allergies: String,
+            social_history: String,
+            family_history: String,
+            additional_notes: String
+        },
+        // Webhook data received from ElevenLabs
+        webhookData: mongoose.Schema.Types.Mixed,
+        // Timestamps
+        reportGeneratedAt: Date,
+        reportUpdatedAt: Date
+    },
     
     // Timestamps
     createdAt: {
@@ -188,34 +240,50 @@ appointmentSchema.pre('save', function(next) {
 });
 
 // Static method to check availability
-appointmentSchema.statics.checkAvailability = async function(doctorId, date, time, duration = 60) {
+appointmentSchema.statics.checkAvailability = async function(doctorId, date, time, duration = 60, excludeAppointmentId = null) {
     const appointmentDate = new Date(date);
     const dayOfWeek = appointmentDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
-    
+
     // Check if doctor is available on this day
     const doctor = await mongoose.model('Doctor').findById(doctorId);
     if (!doctor || !doctor.isClinicOpen(dayOfWeek, time)) {
         return { available: false, reason: 'Clinic is closed on this day/time' };
     }
-    
-    // Check for conflicting appointments at the exact time
-    const conflictingAppointments = await this.find({
+
+    // Build query for conflicting appointments
+    const conflictQuery = {
         doctor: doctorId,
         appointmentDate: appointmentDate,
         status: { $in: ['scheduled', 'confirmed'] },
         appointmentTime: time
-    });
-    
+    };
+
+    // Exclude the current appointment if rescheduling
+    if (excludeAppointmentId) {
+        conflictQuery._id = { $ne: excludeAppointmentId };
+    }
+
+    // Check for conflicting appointments at the exact time
+    const conflictingAppointments = await this.find(conflictQuery);
+
     if (conflictingAppointments.length > 0) {
         return { available: false, reason: 'Time slot is already booked' };
     }
-    
-    // Check for overlapping appointments with duration
-    const overlappingAppointments = await this.find({
+
+    // Build query for overlapping appointments with duration
+    const overlapQuery = {
         doctor: doctorId,
         appointmentDate: appointmentDate,
         status: { $in: ['scheduled', 'confirmed'] }
-    });
+    };
+
+    // Exclude the current appointment if rescheduling
+    if (excludeAppointmentId) {
+        overlapQuery._id = { $ne: excludeAppointmentId };
+    }
+
+    // Check for overlapping appointments with duration
+    const overlappingAppointments = await this.find(overlapQuery);
 
     // Check if any existing appointment overlaps with the new appointment
     for (const appointment of overlappingAppointments) {

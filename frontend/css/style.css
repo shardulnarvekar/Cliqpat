@@ -31,6 +31,9 @@ p {
     color: #64748b;
 }
 
+/* Aesthetic Font Import */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600;700&display=swap');
+
 /* Container */
 .container {
     max-width: 1200px;
@@ -57,21 +60,36 @@ p {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    height: 70px;
+    height: 80px;
 }
 
 .nav-logo {
     display: flex;
     align-items: center;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #3b82f6;
     text-decoration: none;
 }
 
-.nav-logo i {
-    margin-right: 0.5rem;
-    font-size: 1.8rem;
+.nav-logo a {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    transition: transform 0.3s ease;
+}
+
+.nav-logo a:hover {
+    transform: scale(1.05);
+}
+
+.logo-image {
+    height: 85px;
+    width: auto;
+    max-width: 250px;
+    object-fit: contain;
+    transition: all 0.3s ease;
+}
+
+.logo-image:hover {
+    filter: brightness(1.1);
 }
 
 .nav-menu {
@@ -139,7 +157,7 @@ p {
 
 /* Hero Section */
 .hero {
-    padding: 120px 0 80px;
+    padding: 130px 0 80px;
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     position: relative;
@@ -188,6 +206,9 @@ p {
     margin-bottom: 2rem;
     opacity: 0.9;
     line-height: 1.6;
+    color: white !important;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 400;
 }
 
 .hero-buttons {
@@ -431,12 +452,16 @@ p {
 .about-text h2 {
     margin-bottom: 1.5rem;
     color: #1e293b;
+    font-family: 'Playfair Display', serif;
+    font-weight: 600;
 }
 
 .about-text p {
     margin-bottom: 1.5rem;
     color: #64748b;
     line-height: 1.7;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 400;
 }
 
 .about-stats {
@@ -460,6 +485,9 @@ p {
 .stat p {
     margin: 0;
     opacity: 0.9;
+    color: white !important;
+    font-family: 'Poppins', sans-serif;
+    font-weight: 500;
 }
 
 /* Contact Section */
@@ -556,6 +584,32 @@ p {
     color: #fbbf24;
 }
 
+.footer-logo {
+    margin-bottom: 1rem;
+}
+
+.footer-logo a {
+    display: inline-block;
+    transition: transform 0.3s ease;
+}
+
+.footer-logo a:hover {
+    transform: scale(1.05);
+}
+
+.footer-logo-image {
+    height: 50px;
+    width: auto;
+    max-width: 200px;
+    object-fit: contain;
+    filter: brightness(0.9);
+    transition: all 0.3s ease;
+}
+
+.footer-logo-image:hover {
+    filter: brightness(1.1);
+}
+
 .footer-section ul {
     list-style: none;
 }
@@ -613,7 +667,7 @@ p {
     .nav-menu {
         position: fixed;
         left: -100%;
-        top: 70px;
+        top: 80px;
         flex-direction: column;
         background-color: #fff;
         width: 100%;
@@ -625,6 +679,16 @@ p {
 
     .nav-menu.active {
         left: 0;
+    }
+
+    .logo-image {
+        height: 45px;
+        max-width: 180px;
+    }
+
+    .footer-logo-image {
+        height: 40px;
+        max-width: 160px;
     }
 
     .hero-container {

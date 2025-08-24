@@ -61,6 +61,7 @@ function setupDashboardNavigation() {
             e.preventDefault();
             
             const targetId = this.getAttribute('href').substring(1);
+            console.log('Navigating to section:', targetId);
             showSection(targetId);
             
             // Update active state
@@ -68,12 +69,27 @@ function setupDashboardNavigation() {
             this.parentElement.classList.add('active');
         });
     });
+    
+    // Show overview section by default if no section is active
+    const activeSection = document.querySelector('.dashboard-section.active');
+    if (!activeSection) {
+        showSection('overview');
+        const overviewLink = document.querySelector('a[href="#overview"]');
+        if (overviewLink) {
+            sidebarLinks.forEach(l => l.parentElement.classList.remove('active'));
+            overviewLink.parentElement.classList.add('active');
+        }
+    }
 }
 
 // Show dashboard section
 function showSection(sectionId) {
+    console.log('showSection called with:', sectionId);
     const sections = document.querySelectorAll('.dashboard-section');
     const targetSection = document.getElementById(sectionId);
+    
+    console.log('Found sections:', sections.length);
+    console.log('Target section:', targetSection);
     
     if (targetSection) {
         sections.forEach(section => {
@@ -81,15 +97,21 @@ function showSection(sectionId) {
         });
         
         targetSection.classList.add('active');
+        console.log('Section activated:', sectionId);
         
         // Load section-specific data
         loadSectionData(sectionId);
+    } else {
+        console.error('Section not found:', sectionId);
     }
 }
 
 // Load section-specific data
 function loadSectionData(sectionId) {
     switch (sectionId) {
+        case 'overview':
+            loadOverviewData();
+            break;
         case 'clinics':
             loadClinicsData();
             break;
@@ -101,6 +123,20 @@ function loadSectionData(sectionId) {
                 refreshDoctorAppointments();
             }
             break;
+        case 'health-records':
+            if (isPatient()) {
+                initializeEHR();
+            }
+            break;
+        case 'ai-screening':
+            loadAIScreeningData();
+            break;
+        case 'reports':
+            loadReportsData();
+            break;
+        case 'profile':
+            loadProfileData();
+            break;
         case 'patients':
             loadPatientsData();
             break;
@@ -108,12 +144,23 @@ function loadSectionData(sectionId) {
             loadAIReportsData();
             break;
         case 'ehr':
-            loadEHRData();
+            if (isDoctor()) {
+                loadAppointmentsWithEHR();
+            }
             break;
         case 'analytics':
             loadAnalyticsData();
             break;
+        case 'schedule':
+            loadScheduleData();
+            break;
     }
+}
+
+// Load overview data
+function loadOverviewData() {
+    // This will be called when the overview section is shown
+    // Overview data is already loaded in the HTML
 }
 
 // Setup dashboard functions
@@ -195,25 +242,50 @@ async function loadPatientDashboardData() {
 
 // Load doctor dashboard data
 async function loadDoctorDashboardData() {
+    console.log('🏥 Loading doctor dashboard data...');
+
     try {
         const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
-        
+        console.log('👨‍⚕️ Doctor user data:', userData);
+
+        if (!userData || !userData.token) {
+            console.error('❌ No user data or token found');
+            showError('Authentication required. Please login again.');
+            return;
+        }
+
+        console.log('📡 Fetching doctor appointments...');
+
         // Load appointments
         const appointmentsResponse = await fetch('/api/appointments/doctor', {
             headers: {
                 'Authorization': `Bearer ${userData.token}`
             }
         });
-        
+
+        console.log('📡 Appointments response status:', appointmentsResponse.status);
+
         if (appointmentsResponse.ok) {
             const appointmentsData = await appointmentsResponse.json();
+            console.log('✅ Appointments loaded:', appointmentsData);
             updateDoctorAppointments(appointmentsData.data.appointments);
         } else {
-            console.error('Failed to load appointments:', appointmentsResponse.status);
+            const errorData = await appointmentsResponse.json();
+            console.error('❌ Failed to load appointments:', appointmentsResponse.status, errorData);
+
+            if (appointmentsResponse.status === 401) {
+                showError('Session expired. Please login again.');
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 2000);
+            } else {
+                showError('Failed to load appointments: ' + (errorData.message || 'Unknown error'));
+            }
         }
-        
+
     } catch (error) {
-        console.error('Error loading doctor dashboard data:', error);
+        console.error('❌ Error loading doctor dashboard data:', error);
+        showError('Error loading dashboard: ' + error.message);
     }
 }
 
@@ -224,8 +296,18 @@ function updatePatientAppointments(appointments) {
     
     if (!upcomingContainer || !pastContainer) return;
     
-    const upcoming = appointments.filter(apt => apt.status === 'confirmed' || apt.status === 'scheduled');
-    const past = appointments.filter(apt => apt.status === 'completed' || apt.status === 'cancelled');
+    console.log('Updating patient appointments:', appointments);
+    
+    // Filter out appointments with missing doctor data for better user experience
+    const validAppointments = appointments.filter(apt => apt.doctor && apt.doctor.firstName);
+    const invalidAppointments = appointments.filter(apt => !apt.doctor || !apt.doctor.firstName);
+    
+    if (invalidAppointments.length > 0) {
+        console.warn(`Found ${invalidAppointments.length} appointments with missing doctor data`);
+    }
+    
+    const upcoming = validAppointments.filter(apt => apt.status === 'confirmed' || apt.status === 'scheduled');
+    const past = validAppointments.filter(apt => apt.status === 'completed' || apt.status === 'cancelled');
     
     // Update upcoming appointments
     if (upcoming.length > 0) {
@@ -324,45 +406,67 @@ function updatePatientAppointments(appointments) {
 
 // Update doctor appointments
 function updateDoctorAppointments(appointments) {
-    console.log('Updating doctor appointments with:', appointments);
-    
-    const appointmentsList = document.querySelector('.appointments-list');
-    if (!appointmentsList) {
-        console.error('Appointments list element not found');
-        return;
-    }
-    
-    if (appointments && appointments.length > 0) {
-        appointmentsList.innerHTML = appointments.map(appointment => `
-            <div class="appointment-item">
-                <div class="appointment-time">
-                    <span class="time">${appointment.appointmentTime}</span>
-                    <span class="status ${appointment.status}">${appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</span>
-                </div>
-                <div class="appointment-details">
-                    <h4>${appointment.patient?.firstName && appointment.patient?.lastName ? 
-                        `${appointment.patient.firstName} ${appointment.patient.lastName}` : 
-                        'Patient Name Not Available'}</h4>
-                    <p>${appointment.reason || 'No reason specified'}</p>
-                    <div class="appointment-notes">
-                        ${appointment.aiScreening?.isCompleted ? '<span class="ai-report">AI Report Available</span>' : ''}
-                        <span class="ehr">EHR Updated</span>
-                    </div>
-                </div>
-                <div class="appointment-actions">
-                    <button class="btn btn-outline" onclick="rescheduleAppointment('${appointment._id}')">
-                        <i class="fas fa-calendar-alt"></i>
-                        Reschedule
-                    </button>
-                    <button class="btn btn-primary" onclick="startConsultation('${appointment._id}')">
-                        <i class="fas fa-play"></i>
-                        Start
-                    </button>
-                </div>
-            </div>
-        `).join('');
-    } else {
-        appointmentsList.innerHTML = '<p class="no-data">No appointments found</p>';
+    console.log('📋 Updating doctor appointments with:', appointments);
+
+    try {
+        const appointmentsList = document.querySelector('.appointments-list');
+        if (!appointmentsList) {
+            console.error('❌ Appointments list element not found');
+            showError('Dashboard element not found. Please refresh the page.');
+            return;
+        }
+
+        // Store appointments for modal lookup
+        window.lastDoctorAppointments = appointments;
+
+        if (appointments && appointments.length > 0) {
+            console.log('✅ Rendering', appointments.length, 'appointments');
+
+            appointmentsList.innerHTML = appointments.map(appointment => {
+                try {
+                    return `
+                        <div class="appointment-item">
+                            <div class="appointment-time">
+                                <span class="time">${appointment.appointmentTime}</span>
+                                <span class="status ${appointment.status}">${appointment.status.charAt(0).toUpperCase() + appointment.status.slice(1)}</span>
+                            </div>
+                            <div class="appointment-details">
+                                <h4>${appointment.patient?.firstName && appointment.patient?.lastName ?
+                                    `${appointment.patient.firstName} ${appointment.patient.lastName}` :
+                                    'Patient Name Not Available'}</h4>
+                                <p>${appointment.reason || 'No reason specified'}</p>
+                                <div class="appointment-notes">
+                                    ${appointment.aiScreening?.isCompleted ? '<span class="ai-report">AI Report Available</span>' : ''}
+                                    ${appointment.ehrDocuments && appointment.ehrDocuments.length > 0 ? '<span class="ehr">EHR Updated</span>' : ''}
+                                </div>
+                            </div>
+                            <div class="appointment-actions">
+                                <button class="btn btn-outline" onclick="rescheduleAppointment('${appointment._id}')">
+                                    <i class="fas fa-calendar-alt"></i>
+                                    Reschedule
+                                </button>
+                                <button class="btn btn-primary" onclick="startConsultation('${appointment._id}')">
+                                    <i class="fas fa-play"></i>
+                                    Start
+                                </button>
+                                ${appointment.ehrDocuments && appointment.ehrDocuments.length > 0 ? `<button class="btn btn-outline" onclick="showEHRModal('${appointment._id}')"><i class='fas fa-file-medical'></i> View EHR</button>` : ''}
+                            </div>
+                        </div>
+                    `;
+                } catch (error) {
+                    console.error('❌ Error rendering appointment:', appointment._id, error);
+                    return '<div class="appointment-item error">Error rendering appointment</div>';
+                }
+            }).join('');
+
+            console.log('✅ Appointments rendered successfully');
+        } else {
+            console.log('📭 No appointments to display');
+            appointmentsList.innerHTML = '<p class="no-data">No appointments found</p>';
+        }
+    } catch (error) {
+        console.error('❌ Error updating doctor appointments:', error);
+        showError('Error displaying appointments: ' + error.message);
     }
 }
 
@@ -370,19 +474,36 @@ function updateDoctorAppointments(appointments) {
 async function refreshDoctorAppointments() {
     try {
         const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            console.error('No authentication token found');
+            return;
+        }
         
         const response = await fetch('/api/appointments/doctor', {
             headers: {
-                'Authorization': `Bearer ${userData.token}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
         if (response.ok) {
             const data = await response.json();
             updateDoctorAppointments(data.data.appointments);
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        } else {
+            console.error('Failed to load doctor appointments:', response.status);
+            // Don't show error - just log it
         }
     } catch (error) {
         console.error('Error refreshing doctor appointments:', error);
+        // Don't show error - just log it
     }
 }
 
@@ -445,18 +566,131 @@ function getRecordIcon(type) {
 // Load clinics data
 async function loadClinicsData() {
     try {
-        const response = await fetch('/api/doctors/search?limit=20');
+        // Load first batch with a higher limit, then add "Load More" button
+        const response = await fetch('/api/doctors/search?limit=100&page=1');
         if (response.ok) {
             const data = await response.json();
-            updateClinicsGrid(data.data.doctors);
+            updateClinicsGrid(data.data.doctors, data.data.pagination);
         }
     } catch (error) {
         console.error('Error loading clinics:', error);
     }
 }
 
+// Load more doctors for pagination
+async function loadMoreDoctors(page) {
+    try {
+        const response = await fetch(`/api/doctors/search?limit=100&page=${page}`);
+        if (response.ok) {
+            const data = await response.json();
+            appendMoreDoctors(data.data.doctors, data.data.pagination);
+        }
+    } catch (error) {
+        console.error('Error loading more doctors:', error);
+    }
+}
+
+// Append more doctors to the existing grid
+function appendMoreDoctors(doctors, pagination) {
+    const clinicsGrid = document.getElementById('clinicsGrid');
+    if (!clinicsGrid) return;
+    
+    // Remove the existing "Load More" button
+    const existingLoadMore = clinicsGrid.querySelector('.load-more-container');
+    if (existingLoadMore) {
+        existingLoadMore.remove();
+    }
+    
+    // Add new doctor cards
+    const newDoctorCards = doctors.map(doctor => `
+        <div class="clinic-card">
+            <div class="clinic-header">
+                <div class="clinic-avatar">
+                    <i class="fas fa-stethoscope"></i>
+                </div>
+                <div class="clinic-info">
+                    <h3>${doctor.clinicName}</h3>
+                    <p class="doctor-name">${doctor.firstName} ${doctor.lastName}</p>
+                    <p class="specialization">${doctor.specialization}</p>
+                </div>
+                <div class="clinic-rating">
+                    <div class="stars">
+                        ${generateStars(doctor.rating?.average || 0)}
+                    </div>
+                    <span class="rating-text">${doctor.rating?.average || 0}/5</span>
+                </div>
+            </div>
+            <div class="clinic-details">
+                <div class="detail-item">
+                    <i class="fas fa-map-marker-alt"></i>
+                    <span>${doctor.clinicAddress.city}, ${doctor.clinicAddress.state}</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-clock"></i>
+                    <span>${doctor.experience} years experience</span>
+                </div>
+                <div class="detail-item">
+                    <i class="fas fa-rupee-sign"></i>
+                    <span>₹<span class="fee">${doctor.consultationFee}</span> consultation fee</span>
+                </div>
+            </div>
+            <div class="clinic-actions">
+                <button class="btn btn-outline" onclick="viewClinicDetails('${doctor._id}')">
+                    <i class="fas fa-eye"></i>
+                    View Details
+                </button>
+                <button class="btn btn-primary" onclick="bookAppointment('${doctor._id}')">
+                    <i class="fas fa-calendar-plus"></i>
+                    Book Appointment
+                </button>
+            </div>
+            
+            <!-- Weekly Slots View (Initially Hidden) -->
+            <div class="weekly-slots" id="${doctor._id}-slots" style="display: none;">
+                <div class="slots-header">
+                    <h4>Available This Week</h4>
+                    <button class="close-slots" onclick="hideWeeklySlots('${doctor._id}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="week-navigation">
+                    <button class="week-nav-btn" onclick="previousWeek('${doctor._id}')">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="week-range" id="${doctor._id}-week-range">Loading...</span>
+                    <button class="week-nav-btn" onclick="nextWeek('${doctor._id}')">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="daily-slots" id="${doctor._id}-daily-slots">
+                    <!-- Daily slots will be populated here -->
+                </div>
+                <div class="slots-loading" id="${doctor._id}-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    Loading available slots...
+                </div>
+            </div>
+        </div>
+    `).join('');
+    
+    clinicsGrid.innerHTML += newDoctorCards;
+    
+    // Add new Load More button if there are more pages
+    if (pagination && pagination.hasNext) {
+        const loadMoreBtn = document.createElement('div');
+        loadMoreBtn.className = 'load-more-container';
+        loadMoreBtn.innerHTML = `
+            <button class="btn btn-outline load-more-btn" onclick="loadMoreDoctors(${pagination.currentPage + 1})">
+                <i class="fas fa-plus"></i>
+                Load More Doctors (${pagination.totalDoctors - (pagination.currentPage * 100)} remaining)
+            </button>
+        `;
+        clinicsGrid.appendChild(loadMoreBtn);
+    }
+}
+
 // Update clinics grid
-function updateClinicsGrid(doctors) {
+function updateClinicsGrid(doctors, pagination) {
     const clinicsGrid = document.getElementById('clinicsGrid');
     if (!clinicsGrid) return;
     
@@ -531,6 +765,19 @@ function updateClinicsGrid(doctors) {
                 </div>
             </div>
         `).join('');
+        
+        // Add Load More button if there are more pages
+        if (pagination && pagination.hasNext) {
+            const loadMoreBtn = document.createElement('div');
+            loadMoreBtn.className = 'load-more-container';
+            loadMoreBtn.innerHTML = `
+                <button class="btn btn-outline load-more-btn" onclick="loadMoreDoctors(${pagination.currentPage + 1})">
+                    <i class="fas fa-plus"></i>
+                    Load More Doctors (${pagination.totalDoctors - (pagination.currentPage * 100)} remaining)
+                </button>
+            `;
+            clinicsGrid.appendChild(loadMoreBtn);
+        }
     } else {
         clinicsGrid.innerHTML = '<p class="no-data">No clinics found</p>';
     }
@@ -557,9 +804,58 @@ function generateStars(rating) {
 }
 
 // Load appointments data
-function loadAppointmentsData() {
-    // This will be called when the appointments section is shown
-    // Data is already loaded in loadDashboardData()
+async function loadAppointmentsData() {
+    console.log('Loading appointments data...');
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        
+        if (userData.type === 'patient') {
+            await loadPatientAppointments();
+        } else if (userData.type === 'doctor') {
+            await refreshDoctorAppointments();
+        }
+    } catch (error) {
+        console.error('Error loading appointments data:', error);
+    }
+}
+
+// Load patient appointments specifically
+async function loadPatientAppointments() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            console.error('No authentication token found');
+            // Don't show error - just return silently
+            return;
+        }
+        
+        const response = await fetch('/api/appointments/patient', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('Patient appointments loaded:', data.data.appointments);
+            updatePatientAppointments(data.data.appointments);
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        } else {
+            console.error('Failed to load patient appointments:', response.status);
+            // Don't show error - just log it
+        }
+    } catch (error) {
+        console.error('Error loading patient appointments:', error);
+        // Don't show error - just log it
+    }
 }
 
 // Load patients data
@@ -583,15 +879,273 @@ function loadAnalyticsData() {
     // This will be called when the analytics section is shown
 }
 
+// Load AI screening data
+function loadAIScreeningData() {
+    // This will be called when the AI screening section is shown
+}
+
+// Load reports data
+function loadReportsData() {
+    // Load EHR documents in the Reports section
+    loadEHRDocumentsForReports();
+}
+
+// Load EHR documents specifically for Reports section
+async function loadEHRDocumentsForReports() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            console.error('No authentication token found');
+            return;
+        }
+        
+        const response = await fetch('/api/ehr/patient/documents', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayEHRDocumentsInReports(data.data.documents);
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        }
+    } catch (error) {
+        console.error('Error loading EHR documents for reports:', error);
+    }
+}
+
+// Display EHR documents in Reports section
+function displayEHRDocumentsInReports(documents) {
+    const container = document.getElementById('ehrReportsList');
+    if (!container) return;
+
+    if (documents.length === 0) {
+        container.innerHTML = '<p class="no-documents">No EHR documents uploaded yet. Upload your first document in the Health Records section.</p>';
+        return;
+    }
+
+    container.innerHTML = documents.map(doc => `
+        <div class="report-document-card">
+            <div class="document-icon">
+                <i class="fas fa-file-pdf"></i>
+            </div>
+            <div class="document-info">
+                <h4>${doc.title}</h4>
+                <p class="document-description">${doc.description || 'No description available'}</p>
+                <div class="document-meta">
+                    <span class="upload-date">📅 ${new Date(doc.uploadDate).toLocaleDateString()}</span>
+                    <span class="file-size">📁 ${formatFileSize(doc.fileSize)}</span>
+                    ${doc.appointment ? `<span class="appointment-link">🔗 Linked to appointment</span>` : ''}
+                </div>
+            </div>
+            <div class="document-actions">
+                <button class="btn btn-outline small" onclick="viewEHRDocument('${doc._id}')">
+                    <i class="fas fa-eye"></i> View
+                </button>
+                <button class="btn btn-outline small" onclick="downloadEHRDocument('${doc.fileName}')">
+                    <i class="fas fa-download"></i> Download
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Load profile data
+function loadProfileData() {
+    // This will be called when the profile section is shown
+}
+
+// Load schedule data
+function loadScheduleData() {
+    // This will be called when the schedule section is shown
+}
+
 // Appointment functions
-function rescheduleAppointment(appointmentId) {
-    // Implement reschedule functionality
-    console.log('Reschedule appointment:', appointmentId);
+async function rescheduleAppointment(appointmentId) {
+    console.log('🔄 Reschedule button clicked for appointment:', appointmentId);
+
+    try {
+        // Get token from user data
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+
+        console.log('🔑 Token found:', !!token);
+
+        if (!token) {
+            console.error('❌ No authentication token found');
+            showError('Authentication required. Please login again.');
+            return;
+        }
+
+        console.log('📡 Fetching appointment details for:', appointmentId);
+
+        const response = await fetch(`/api/appointments/${appointmentId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        console.log('📡 Response status:', response.status);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Failed to load appointment:', response.status, errorData);
+            showError(errorData.message || 'Failed to load appointment details');
+            return;
+        }
+
+        const result = await response.json();
+        const appointment = result.data.appointment;
+
+        console.log('✅ Appointment loaded successfully:', appointment);
+
+        // Show reschedule modal
+        showRescheduleModal(appointment);
+
+    } catch (error) {
+        console.error('❌ Error loading appointment for reschedule:', error);
+        showError('Error loading appointment details: ' + error.message);
+    }
 }
 
 function cancelAppointment(appointmentId) {
     // Implement cancel functionality
     console.log('Cancel appointment:', appointmentId);
+}
+
+// Show reschedule modal
+function showRescheduleModal(appointment) {
+    const modal = document.createElement('div');
+    modal.className = 'modal-overlay';
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    `;
+
+    const currentDate = new Date(appointment.appointmentDate).toISOString().split('T')[0];
+    const currentTime = appointment.appointmentTime;
+
+    modal.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: 12px; max-width: 500px; width: 90%; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h3 style="margin: 0; color: #333;">Reschedule Appointment</h3>
+                <button onclick="this.closest('.modal-overlay').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #666;">&times;</button>
+            </div>
+
+            <div style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                <h4 style="margin: 0 0 10px 0; color: #333;">Current Appointment</h4>
+                <p style="margin: 5px 0; color: #666;"><strong>Date:</strong> ${new Date(appointment.appointmentDate).toLocaleDateString()}</p>
+                <p style="margin: 5px 0; color: #666;"><strong>Time:</strong> ${appointment.appointmentTime}</p>
+                <p style="margin: 5px 0; color: #666;"><strong>Patient:</strong> ${appointment.patient?.firstName} ${appointment.patient?.lastName}</p>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">New Date:</label>
+                <input type="date" id="rescheduleDate" value="${currentDate}" min="${new Date().toISOString().split('T')[0]}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">New Time:</label>
+                <input type="time" id="rescheduleTime" value="${currentTime}" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px;">
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">Reason for Reschedule (Optional):</label>
+                <textarea id="rescheduleReason" placeholder="Enter reason for rescheduling..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; min-height: 80px; resize: vertical;"></textarea>
+            </div>
+
+            <div style="display: flex; gap: 15px; justify-content: flex-end;">
+                <button onclick="this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Cancel</button>
+                <button onclick="confirmReschedule('${appointment._id}')" style="padding: 10px 20px; background: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Reschedule</button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(modal);
+}
+
+// Confirm reschedule
+async function confirmReschedule(appointmentId) {
+    try {
+        const newDate = document.getElementById('rescheduleDate').value;
+        const newTime = document.getElementById('rescheduleTime').value;
+        const reason = document.getElementById('rescheduleReason').value;
+
+        if (!newDate || !newTime) {
+            showError('Please select both date and time');
+            return;
+        }
+
+        // Get token from user data
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+
+        if (!token) {
+            showError('Authentication required. Please login again.');
+            return;
+        }
+
+        console.log('Rescheduling appointment:', appointmentId, 'to', newDate, newTime);
+
+        const response = await fetch(`/api/appointments/${appointmentId}/reschedule`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                appointmentDate: newDate,
+                appointmentTime: newTime,
+                reason: reason
+            })
+        });
+
+        const result = await response.json();
+        console.log('Reschedule response:', response.status, result);
+
+        if (response.ok) {
+            // Close modal
+            document.querySelector('.modal-overlay').remove();
+
+            // Show success message
+            showSuccess('Appointment rescheduled successfully!');
+
+            // Refresh appointments list
+            if (typeof refreshDoctorAppointments === 'function') {
+                refreshDoctorAppointments();
+            } else if (typeof loadAppointmentsData === 'function') {
+                loadAppointmentsData();
+            } else {
+                // Reload the page as fallback
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1500);
+            }
+        } else {
+            showError(result.message || 'Failed to reschedule appointment');
+        }
+
+    } catch (error) {
+        console.error('Error rescheduling appointment:', error);
+        showError('Error rescheduling appointment: ' + error.message);
+    }
 }
 
 function viewAppointmentDetails(appointmentId) {
@@ -736,6 +1290,32 @@ function updateWeeklySlotsUI(doctorId, data) {
                 </div>
             `;
         }).join('');
+    }
+}
+
+// Previous week navigation
+function previousWeek(doctorId) {
+    const weekRangeElement = document.getElementById(`${doctorId}-week-range`);
+    if (weekRangeElement) {
+        const currentText = weekRangeElement.textContent;
+        // Extract current start date and calculate previous week
+        // This is a simplified implementation
+        const currentDate = new Date();
+        currentDate.setDate(currentDate.getDate() - 7);
+        loadWeeklySlots(doctorId, currentDate.toISOString().split('T')[0]);
+    }
+}
+
+// Next week navigation
+function nextWeek(doctorId) {
+    const weekRangeElement = document.getElementById(`${doctorId}-week-range`);
+    if (weekRangeElement) {
+        const currentText = weekRangeElement.textContent;
+        // Extract current start date and calculate next week
+        // This is a simplified implementation
+        const currentDate = new Date();
+        currentDate.setDate(currentDate.getDate() + 7);
+        loadWeeklySlots(doctorId, currentDate.toISOString().split('T')[0]);
     }
 }
 
@@ -925,16 +1505,23 @@ async function confirmBooking() {
             // Refresh the slots
             loadWeeklySlots(selectedSlotData.doctorId);
             
-            // Refresh appointments data if on appointments section
-            loadSectionData('appointments');
-            
-            // If current user is a doctor, refresh their appointments
-            const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
-            if (userData && userData.type === 'doctor') {
-                setTimeout(() => {
-                    refreshDoctorAppointments();
-                }, 1000); // Small delay to ensure the appointment is saved
-            }
+            // Refresh appointments data for both patients and doctors
+            setTimeout(async () => {
+                // Always reload appointments after successful booking
+                const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+                
+                if (userData && userData.type === 'patient') {
+                    await loadPatientAppointments();
+                } else if (userData && userData.type === 'doctor') {
+                    await refreshDoctorAppointments();
+                }
+                
+                // Also refresh if appointments section is active
+                const appointmentsSection = document.getElementById('appointments');
+                if (appointmentsSection && appointmentsSection.classList.contains('active')) {
+                    loadSectionData('appointments');
+                }
+            }, 1000); // Small delay to ensure the appointment is saved
         } else {
             showError(result.message || 'Failed to book appointment');
         }
@@ -948,471 +1535,1132 @@ async function confirmBooking() {
 let currentAICallDoctorId = null;
 let aiCallInterval = null;
 
-// Initiate AI Call
+// Initiate AI Call - Now uses direct floating widget approach
 function initiateAICall(doctorId) {
-    currentAICallDoctorId = doctorId;
+    console.log('🚀 Starting direct AI call for doctor:', doctorId);
     
-    // Get doctor details
-    const doctorCard = document.querySelector(`[data-doctor-id="${doctorId}"]`) || 
-                      document.querySelector('.clinic-card'); // Fallback to first clinic card
-    const doctorName = doctorCard.querySelector('h3').textContent;
-    const doctorSpecialty = doctorCard.querySelector('.clinic-info p').textContent;
-    const doctorAvatar = doctorCard.querySelector('img').src;
-    
-    // Update modal with doctor info
-    document.getElementById('callDoctorName').textContent = doctorName;
-    document.getElementById('callDoctorSpecialty').textContent = doctorSpecialty;
-    document.getElementById('callDoctorAvatar').src = doctorAvatar;
-    
-    // Show AI call modal
-    const modal = document.getElementById('aiCallModal');
-    if (modal) {
-        modal.classList.add('active');
-        // Reset modal state
-        document.getElementById('callSetupForm').style.display = 'block';
-        document.getElementById('activeCallInterface').style.display = 'none';
-        document.getElementById('callResults').style.display = 'none';
-    }
+    // Use the same direct approach as callDoctor
+    callDoctor(doctorId);
 }
 
-// Start AI Call
-async function startAICall() {
-    const symptoms = document.getElementById('callSymptoms').value;
-    const urgency = document.getElementById('callUrgency').value;
-    const duration = document.getElementById('callDuration').value;
+// Call Doctor functionality - Direct call without modal
+function callDoctor(appointmentId) {
+    console.log('Starting direct AI call for appointment:', appointmentId);
     
-    if (!symptoms.trim()) {
-        showError('Please describe your symptoms or concerns');
+    // Create floating call widget overlay
+    createFloatingCallWidget(appointmentId);
+    
+    // Start the AI call immediately
+    startDirectAICall(appointmentId);
+}
+
+// Create a floating call widget
+function createFloatingCallWidget(appointmentId) {
+    // Remove any existing widget
+    const existingWidget = document.getElementById('floatingCallWidget');
+    if (existingWidget) {
+        existingWidget.remove();
+    }
+    
+    // Create floating widget container
+    const widget = document.createElement('div');
+    widget.id = 'floatingCallWidget';
+    widget.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        width: 320px;
+        max-height: 400px;
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+        z-index: 10000;
+        padding: 20px;
+        border: 2px solid #4CAF50;
+    `;
+    
+    widget.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+            <h4 style="margin: 0; color: #333; font-size: 16px;">🤖 AI Health Call</h4>
+            <button onclick="endDirectAICall()" style="background: #ff4757; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 18px;">×</button>
+        </div>
+        <div id="callStatus" style="text-align: center; margin-bottom: 15px;">
+            <div style="color: #4CAF50; font-weight: bold; margin-bottom: 5px;">Connecting...</div>
+            <div style="color: #666; font-size: 12px;">Please wait while we connect you to the AI assistant</div>
+        </div>
+        <div id="elevenLabsContainer" style="text-align: center; margin: 15px 0;">
+            <!-- ElevenLabs widget will be inserted here -->
+        </div>
+    `;
+    
+    document.body.appendChild(widget);
+}
+
+// Start direct AI call
+function startDirectAICall(appointmentId) {
+    console.log('🚀 Starting direct AI call for appointment:', appointmentId);
+    
+    // Update status to loading
+    const statusDiv = document.querySelector('#floatingCallWidget #callStatus');
+    if (statusDiv) {
+        statusDiv.innerHTML = `
+            <div style="color: #4CAF50; font-weight: bold; margin-bottom: 5px;">🔄 Loading AI Widget...</div>
+            <div style="color: #666; font-size: 12px;">Please wait while we load the AI assistant</div>
+        `;
+    }
+    
+    // Check if ElevenLabs script is loaded
+    if (typeof window.customElements === 'undefined') {
+        console.warn('⚠️ Custom elements not supported or ElevenLabs script not loaded');
+        // Don't start fallback - just show error
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div style="color: #e74c3c; font-weight: bold; margin-bottom: 5px;">⚠️ ElevenLabs Not Available</div>
+                <div style="color: #666; font-size: 12px;">Please refresh the page and try again</div>
+            `;
+        }
         return;
     }
     
     try {
-        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        // Wait a bit for the script to fully load
+        setTimeout(() => {
+            console.log('🔧 Creating ElevenLabs widget...');
+            
+            // Update status
+            if (statusDiv) {
+                statusDiv.innerHTML = `
+                    <div style="color: #4CAF50; font-weight: bold; margin-bottom: 5px;">🎯 Connecting to AI...</div>
+                    <div style="color: #666; font-size: 12px;">Establishing connection with health assistant</div>
+                `;
+            }
+            
+            // Create the ElevenLabs widget
+            const widget = document.createElement('elevenlabs-convai');
+            widget.setAttribute('agent-id', 'agent_4001k36rkyn0e248jz1tqyx1r6es');
+            
+            // Set additional attributes for better compatibility
+            widget.style.width = '100%';
+            widget.style.height = 'auto';
+            widget.style.minHeight = '60px';
+            
+            console.log('🎯 Widget created, adding event listeners...');
+            
+            // Event listeners with better error handling
+            widget.addEventListener('connected', (event) => {
+                console.log('✅ ElevenLabs widget connected successfully', event);
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <div style="color: #27ae60; font-weight: bold; margin-bottom: 5px;">🎤 AI Connected - Ready!</div>
+                        <div style="color: #666; font-size: 12px;">You can now speak with the AI health assistant</div>
+                    `;
+                }
+            });
+            
+            widget.addEventListener('disconnected', (event) => {
+                console.log('❌ ElevenLabs widget disconnected', event);
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <div style="color: #e74c3c; font-weight: bold; margin-bottom: 5px;">📞 Call Ended</div>
+                        <div style="color: #666; font-size: 12px;">Thank you for using our AI health assistant</div>
+                    `;
+                }
+            });
+            
+            widget.addEventListener('message', (event) => {
+                console.log('📨 Widget message received:', event.detail);
+            });
+            
+            widget.addEventListener('error', (event) => {
+                console.error('❌ ElevenLabs widget error:', event.detail);
+                if (statusDiv) {
+                    statusDiv.innerHTML = `
+                        <div style="color: #e74c3c; font-weight: bold; margin-bottom: 5px;">⚠️ Connection Error</div>
+                        <div style="color: #666; font-size: 12px;">Please try refreshing the page</div>
+                    `;
+                }
+                // Don't start fallback - let user decide
+            });
+            
+            // Insert widget into container
+            const container = document.querySelector('#floatingCallWidget #elevenLabsContainer');
+            if (container) {
+                container.innerHTML = ''; // Clear container first
+                container.appendChild(widget);
+                console.log('🔧 ElevenLabs widget added to DOM successfully');
+                
+                // Store reference for cleanup
+                window.currentElevenLabsWidget = widget;
+                
+                // Remove the timeout that was causing fallback
+                // Let ElevenLabs run without interruption
+            }
+        }, 1000);
         
-        // Show call interface
-        document.getElementById('callSetupForm').style.display = 'none';
-        document.getElementById('activeCallInterface').style.display = 'block';
-        
-        // Start AI call simulation
-        simulateAICall();
-        
-        // Make API call
-        const response = await fetch(`/api/appointments/ai-call/${currentAICallDoctorId}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${userData.token}`
-            },
-            body: JSON.stringify({
-                symptoms: symptoms.split(',').map(s => s.trim()),
-                urgency: urgency,
-                duration: duration
-            })
-        });
-        
-        const result = await response.json();
-        
-        if (response.ok) {
-            // Simulate call completion after 10 seconds
-            setTimeout(() => {
-                showAICallResults(result.data.callSession);
-            }, 10000);
-        } else {
-            showError(result.message || 'Failed to initiate AI call');
-            closeAICallModal();
-        }
     } catch (error) {
-        console.error('Error starting AI call:', error);
-        showError('Error starting AI call');
-        closeAICallModal();
+        console.error('❌ Error creating ElevenLabs widget:', error);
+        if (statusDiv) {
+            statusDiv.innerHTML = `
+                <div style="color: #e74c3c; font-weight: bold; margin-bottom: 5px;">⚠️ Widget Creation Failed</div>
+                <div style="color: #666; font-size: 12px;">Please refresh and try again</div>
+            `;
+        }
+        // Don't start fallback - let user decide
     }
 }
 
-// Simulate AI call progress
-function simulateAICall() {
-    let progress = 0;
-    const statusTexts = [
-        'AI Assistant is analyzing your symptoms...',
-        'Processing medical data...',
-        'Generating preliminary assessment...',
-        'Finalizing recommendations...'
-    ];
+// Fallback call simulation
+function startCallSimulation() {
+    console.log('🎭 Starting AI call simulation...');
     
-    let textIndex = 0;
+    const statusDiv = document.querySelector('#floatingCallWidget #callStatus');
+    const container = document.querySelector('#floatingCallWidget #elevenLabsContainer');
     
-    aiCallInterval = setInterval(() => {
-        progress += 10;
-        
-        // Update progress bar
-        document.getElementById('callProgress').style.width = `${progress}%`;
-        document.getElementById('callProgressText').textContent = `${progress}% Complete`;
-        
-        // Update status text
-        if (progress % 25 === 0 && textIndex < statusTexts.length) {
-            document.getElementById('callStatusText').textContent = statusTexts[textIndex];
-            textIndex++;
-        }
-        
-        if (progress >= 100) {
-            clearInterval(aiCallInterval);
-        }
-    }, 500);
-}
-
-// Show AI call results
-function showAICallResults(callSession) {
-    clearInterval(aiCallInterval);
-    
-    // Hide call interface and show results
-    document.getElementById('activeCallInterface').style.display = 'none';
-    document.getElementById('callResults').style.display = 'block';
-    
-    // Mock AI assessment results
-    const assessmentSummary = document.getElementById('assessmentSummary');
-    const aiRecommendations = document.getElementById('aiRecommendations');
-    const nextSteps = document.getElementById('nextSteps');
-    
-    // Generate mock assessment based on urgency
-    const mockAssessment = generateMockAssessment(callSession.urgency);
-    
-    if (assessmentSummary) {
-        assessmentSummary.innerHTML = `
-            <div class="assessment-item">
-                <span class="label">Risk Level:</span>
-                <span class="value ${mockAssessment.riskLevel}">${mockAssessment.riskLevel.charAt(0).toUpperCase() + mockAssessment.riskLevel.slice(1)}</span>
-            </div>
-            <div class="assessment-item">
-                <span class="label">Primary Assessment:</span>
-                <span class="value">${mockAssessment.assessment}</span>
-            </div>
+    if (statusDiv) {
+        statusDiv.innerHTML = `
+            <div style="color: #f39c12; font-weight: bold; margin-bottom: 5px;">🎭 Demo Mode Active</div>
+            <div style="color: #666; font-size: 12px;">AI simulation is running</div>
         `;
     }
     
-    if (aiRecommendations) {
-        aiRecommendations.innerHTML = mockAssessment.recommendations.map(rec => `<li>${rec}</li>`).join('');
-    }
-    
-    if (nextSteps) {
-        nextSteps.innerHTML = mockAssessment.nextSteps;
+    if (container) {
+        container.innerHTML = `
+            <div style="padding: 20px; background: #f8f9fa; border-radius: 8px; margin: 10px 0;">
+                <div style="text-align: center; margin-bottom: 15px;">
+                    <div style="width: 60px; height: 60px; background: #4CAF50; border-radius: 50%; margin: 0 auto 10px; display: flex; align-items: center; justify-content: center; color: white; font-size: 24px;">🎤</div>
+                    <h5 style="margin: 0; color: #333;">AI Health Assistant</h5>
+            </div>
+                <div style="background: white; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin-bottom: 15px;">
+                    <p style="margin: 0; color: #666; font-size: 14px; text-align: center;">🤖 "Hello! I'm your AI health assistant. How can I help you today?"</p>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button onclick="simulateAIResponse('I have a headache')" style="flex: 1; padding: 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">I have a headache</button>
+                    <button onclick="simulateAIResponse('I feel dizzy')" style="flex: 1; padding: 8px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">I feel dizzy</button>
+                </div>
+                <div style="margin-top: 10px;">
+                    <input type="text" id="simulatedInput" placeholder="Type your symptoms..." style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px;">
+                    <button onclick="sendSimulatedMessage()" style="width: 100%; margin-top: 5px; padding: 8px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">Send</button>
+                </div>
+            </div>
+        `;
     }
 }
 
-// Generate mock AI assessment
-function generateMockAssessment(urgency) {
-    const assessments = {
-        normal: {
-            riskLevel: 'low',
-            assessment: 'Your symptoms appear to be minor and manageable. Regular monitoring is recommended.',
-            recommendations: [
-                'Monitor symptoms over the next 24-48 hours',
-                'Stay hydrated and get adequate rest',
-                'Consider over-the-counter medication if needed',
-                'Schedule a routine consultation if symptoms persist'
-            ],
-            nextSteps: '<p>Based on your symptoms, a routine consultation would be beneficial. You can book an appointment at your convenience.</p>'
-        },
-        moderate: {
-            riskLevel: 'medium',
-            assessment: 'Your symptoms require attention and should be evaluated by a healthcare professional soon.',
-            recommendations: [
-                'Book an appointment within the next 24-48 hours',
-                'Monitor symptoms closely and note any changes',
-                'Avoid strenuous activities until evaluated',
-                'Keep a symptom diary for the doctor'
-            ],
-            nextSteps: '<p><strong>Recommended:</strong> Book an appointment within the next 1-2 days for proper evaluation.</p>'
-        },
-        high: {
-            riskLevel: 'high',
-            assessment: 'Your symptoms indicate a condition that requires prompt medical attention.',
-            recommendations: [
-                'Seek immediate medical attention',
-                'Book an urgent appointment today if possible',
-                'Monitor symptoms closely',
-                'Have someone accompany you to the appointment'
-            ],
-            nextSteps: '<p><strong>Urgent:</strong> We strongly recommend booking an emergency consultation or visiting the nearest emergency room if symptoms worsen.</p>'
+// Simulate AI response
+function simulateAIResponse(symptom) {
+    const container = document.querySelector('#floatingCallWidget #elevenLabsContainer');
+    if (container) {
+        const responseDiv = document.createElement('div');
+        responseDiv.style.cssText = 'background: white; padding: 15px; border-radius: 8px; border: 1px solid #e9ecef; margin: 10px 0;';
+        responseDiv.innerHTML = `
+            <p style="margin: 0; color: #666; font-size: 14px; text-align: center;">🤖 "I understand you're experiencing ${symptom}. Let me ask you a few questions to better assess your situation..."</p>
+        `;
+        
+        const existingResponse = container.querySelector('.ai-response');
+        if (existingResponse) {
+            existingResponse.remove();
         }
-    };
-    
-    return assessments[urgency] || assessments.normal;
+        
+        responseDiv.className = 'ai-response';
+        container.appendChild(responseDiv);
+    }
 }
 
-// Close AI call modal
-function closeAICallModal() {
-    const modal = document.getElementById('aiCallModal');
-    if (modal) {
-        modal.classList.remove('active');
+// Send simulated message
+function sendSimulatedMessage() {
+    const input = document.getElementById('simulatedInput');
+    const message = input.value.trim();
+    
+    if (message) {
+        simulateAIResponse(message);
+        input.value = '';
+    }
+}
+
+// End direct AI call
+function endDirectAICall() {
+    console.log('🛑 Ending direct AI call...');
+    
+    // Clean up ElevenLabs widget if exists
+    if (window.currentElevenLabsWidget) {
+        try {
+            window.currentElevenLabsWidget.remove();
+            window.currentElevenLabsWidget = null;
+        } catch (error) {
+            console.warn('⚠️ Error removing ElevenLabs widget:', error);
+        }
     }
     
-    // Clear interval
+    // Remove floating widget
+    const widget = document.getElementById('floatingCallWidget');
+    if (widget) {
+        widget.remove();
+    }
+    
+    // Clear any intervals
     if (aiCallInterval) {
         clearInterval(aiCallInterval);
         aiCallInterval = null;
     }
     
-    // Reset form
-    document.getElementById('callSymptoms').value = '';
-    document.getElementById('callUrgency').value = 'normal';
-    document.getElementById('callDuration').value = 'new';
-    
-    currentAICallDoctorId = null;
+    console.log('✅ Direct AI call ended and cleaned up');
 }
 
-// End AI call
-function endAICall() {
-    closeAICallModal();
+// Close AI call modal (for backward compatibility)
+function closeAICallModal() {
+    endDirectAICall();
 }
 
-// Book appointment from AI results
-function bookAppointmentFromAI() {
-    if (currentAICallDoctorId) {
-        closeAICallModal();
-        // Show the weekly slots for quick booking
-        showWeeklySlots(currentAICallDoctorId);
-        // Scroll to the doctor card
-        const doctorCard = document.querySelector(`#${currentAICallDoctorId}-slots`).closest('.clinic-card');
-        if (doctorCard) {
-            doctorCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+// Get doctor information (placeholder function)
+function getDoctorInfo(doctorId) {
+    const doctors = {
+        'doctor1': {
+            name: 'Dr. Sarah Smith',
+            specialty: 'Cardiology • Apollo Hospital',
+            avatar: 'images/doctor1.jpg'
+        },
+        'doctor2': {
+            name: 'Dr. Michael Johnson',
+            specialty: 'Neurology • City Medical Center',
+            avatar: 'images/doctor2.jpg'
         }
+    };
+    
+    return doctors[doctorId] || {
+        name: 'Dr. Unknown',
+        specialty: 'Specialization • Hospital',
+        avatar: 'images/avatar.png'
+    };
+}
+
+// ===== Doctor EHR Functions =====
+
+// Load appointments with EHR documents for doctors
+async function loadAppointmentsWithEHR() {
+    try {
+        const token = localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        const response = await fetch('/api/appointments/doctor', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayAppointmentsWithEHR(data.appointments);
+        }
+    } catch (error) {
+        console.error('Error loading appointments with EHR:', error);
     }
 }
 
-// Save AI report
-function saveAIReport() {
-    // Mock save functionality
-    showSuccess('AI report saved to your health records');
-}
+// Display appointments with EHR documents
+function displayAppointmentsWithEHR(appointments) {
+    const container = document.getElementById('ehrAppointmentsList');
+    if (!container) return;
 
-// Share AI report
-function shareAIReport() {
-    // Mock share functionality
-    showSuccess('AI report shared with doctor');
-}
-
-// Show booking success with AI call option
-function showBookingSuccessWithAI(appointment, doctorId) {
-    // Remove existing notifications
-    const existingNotifications = document.querySelectorAll('.notification');
-    existingNotifications.forEach(notification => notification.remove());
+    const appointmentsWithEHR = appointments.filter(apt => apt.ehrDocuments && apt.ehrDocuments.length > 0);
     
-    // Create success notification with AI call button
-    const notification = document.createElement('div');
-    notification.className = 'notification success booking-success';
-    notification.innerHTML = `
-        <div class="notification-content">
-            <div class="success-header">
-                <i class="fas fa-check-circle"></i>
-                <div class="success-text">
-                    <h4>Appointment Booked Successfully!</h4>
-                    <p>Your appointment with ${appointment.doctor.name || `${appointment.doctor.firstName} ${appointment.doctor.lastName}`} is confirmed for ${new Date(appointment.appointmentDate).toLocaleDateString()} at ${appointment.appointmentTime}.</p>
+    if (appointmentsWithEHR.length === 0) {
+        container.innerHTML = '<p>No appointments with uploaded EHR documents found.</p>';
+        return;
+    }
+
+    container.innerHTML = appointmentsWithEHR.map(appointment => `
+        <div class="appointment-card">
+            <div class="appointment-header">
+                <h4>${appointment.patient.fullName}</h4>
+                <span class="appointment-date">${new Date(appointment.appointmentDate).toLocaleDateString()} ${appointment.appointmentTime}</span>
+            </div>
+            <div class="ehr-documents">
+                <h5>Uploaded Documents:</h5>
+                <div class="document-list">
+                    ${appointment.ehrDocuments.map(doc => `
+                        <div class="document-item">
+                            <i class="fas fa-file-pdf"></i>
+                            <span>${doc.originalName}</span>
+                            <button class="btn btn-sm btn-outline" onclick="viewEHRDocument('${doc.fileName}')">
+                                <i class="fas fa-eye"></i> View
+                            </button>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
-            <div class="ai-call-option">
-                <p>Would you like to have a preliminary AI health consultation before your appointment?</p>
-                <div class="ai-call-actions">
-                    <button class="btn btn-success" onclick="initiateAICall('${doctorId}')">
-                        <i class="fas fa-robot"></i>
-                        Call with AI
+            <div class="appointment-actions">
+                <button class="btn btn-primary" onclick="viewPatientEHR('${appointment.patient._id}')">
+                    <i class="fas fa-user-md"></i> View Full EHR
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// View EHR document
+function viewEHRDocument(filename) {
+    console.log('👁️ View EHR button clicked for file:', filename);
+
+    try {
+        // Get token for authentication
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+
+        console.log('🔑 Token found for EHR view:', !!token);
+
+        if (!token) {
+            console.error('❌ No authentication token found for EHR view');
+            showError('Authentication required. Please login again.');
+            return;
+        }
+
+        const viewUrl = `/api/ehr/view/${filename}?token=${encodeURIComponent(token)}`;
+        console.log('🌐 Opening EHR document at:', viewUrl);
+
+        // Open with token as query parameter
+        window.open(viewUrl, '_blank');
+
+    } catch (error) {
+        console.error('❌ Error viewing EHR document:', error);
+        showError('Error opening document: ' + error.message);
+    }
+}
+
+// View patient's full EHR
+async function viewPatientEHR(patientId) {
+    try {
+        const token = localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        const response = await fetch(`/api/patients/${patientId}/ehr`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            displayPatientEHR(data.patient);
+        }
+    } catch (error) {
+        console.error('Error loading patient EHR:', error);
+    }
+}
+
+// Display patient EHR
+function displayPatientEHR(patient) {
+    const container = document.getElementById('ehrRecords');
+    if (!container) return;
+
+    container.innerHTML = `
+        <div class="record-card">
+            <div class="record-header">
+                <h3>${patient.fullName} - EHR</h3>
+                <span class="last-updated">Last updated: ${new Date(patient.updatedAt).toLocaleDateString()}</span>
+                </div>
+            <div class="record-sections">
+                <div class="record-section">
+                    <h4>Personal Information</h4>
+                    <div class="info-grid">
+                        <div class="info-item">
+                            <span class="label">Age:</span>
+                            <span class="value">${patient.age} years</span>
+            </div>
+                        <div class="info-item">
+                            <span class="label">Blood Group:</span>
+                            <span class="value">${patient.bloodGroup || 'Not specified'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="label">Allergies:</span>
+                            <span class="value">${patient.allergies.length > 0 ? patient.allergies.map(a => a.allergen).join(', ') : 'None'}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="record-section">
+                    <h4>Medical History</h4>
+                    <ul class="medical-history">
+                        ${patient.medicalHistory.length > 0 ? 
+                            patient.medicalHistory.map(h => `<li>${h.condition} (${new Date(h.diagnosedDate).getFullYear()} - ${h.status})</li>`).join('') : 
+                            '<li>No medical history recorded</li>'
+                        }
+                    </ul>
+                </div>
+                <div class="record-section">
+                    <h4>EHR Documents</h4>
+                    <div class="ehr-documents-list">
+                        ${patient.medicalRecords.filter(r => r.isEHRDocument).length > 0 ? 
+                            patient.medicalRecords.filter(r => r.isEHRDocument).map(doc => `
+                                <div class="ehr-doc-item">
+                                    <i class="fas fa-file-pdf"></i>
+                                    <span>${doc.title}</span>
+                                    <button class="btn btn-sm btn-outline" onclick="viewEHRDocument('${doc.fileName}')">
+                                        <i class="fas fa-eye"></i> View
                     </button>
-                    <button class="btn btn-outline" onclick="this.closest('.notification').remove()">
-                        Maybe Later
-                    </button>
+                                </div>
+                            `).join('') : 
+                            '<p>No EHR documents uploaded</p>'
+                        }
+                    </div>
                 </div>
             </div>
         </div>
     `;
+}
+
+// ===== Utility Functions =====
+
+// Handle file selection for EHR upload
+function handleEHRFileSelect() {
+    const fileInput = document.getElementById('ehrDocument');
+    const fileNameSpan = document.getElementById('selectedFileName');
     
+    if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        fileNameSpan.textContent = file.name;
+        fileNameSpan.style.display = 'inline';
+    } else {
+        fileNameSpan.style.display = 'none';
+    }
+}
+
+// Initialize EHR functionality
+function initializeEHR() {
+    // Load appointments for EHR linking
+    loadAppointmentsForEHR();
+    
+    // Load existing EHR documents
+    loadEHRDocuments();
+    
+    // Setup file selection handler
+    const fileInput = document.getElementById('ehrDocument');
+    if (fileInput) {
+        fileInput.addEventListener('change', handleEHRFileSelect);
+    }
+    
+    // Setup form submission handler
+    const uploadForm = document.getElementById('ehrUploadForm');
+    if (uploadForm) {
+        uploadForm.addEventListener('submit', handleEHRFormSubmit);
+    }
+}
+
+// Handle EHR form submission
+async function handleEHRFormSubmit(event) {
+    event.preventDefault();
+    await uploadEHRDocument();
+}
+
+// Upload EHR document
+async function uploadEHRDocument() {
+    const form = document.getElementById('ehrUploadForm');
+    const formData = new FormData(form);
+    
+    // Validate required fields
+    const title = formData.get('title');
+    const file = formData.get('ehrDocument');
+    
+    if (!title || !title.trim()) {
+        showError('Please enter a document title');
+        return;
+    }
+    
+    if (!file || file.size === 0) {
+        showError('Please select a PDF file to upload');
+        return;
+    }
+    
+    // Validate file type
+    if (file.type !== 'application/pdf') {
+        showError('Only PDF files are allowed');
+        return;
+    }
+    
+    // Validate file size (10MB limit)
+    if (file.size > 10 * 1024 * 1024) {
+        showError('File size must be less than 10MB');
+        return;
+    }
+    
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            showError('Authentication required');
+            return;
+        }
+        
+        // Show loading state
+        const uploadBtn = form.querySelector('button[type="submit"]');
+        const originalText = uploadBtn.innerHTML;
+        uploadBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+        uploadBtn.disabled = true;
+        
+        const response = await fetch('/api/ehr/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            const result = await response.json();
+            showSuccess('EHR document uploaded successfully!');
+            form.reset();
+            document.getElementById('selectedFileName').style.display = 'none';
+            
+            // Refresh both Health Records and Reports sections
+            loadEHRDocuments(); // Refresh Health Records section
+            loadEHRDocumentsForReports(); // Refresh Reports section
+            
+            // Also refresh if we're currently in Reports section
+            const currentSection = document.querySelector('.dashboard-section.active');
+            if (currentSection && currentSection.id === 'reports') {
+                loadEHRDocumentsForReports();
+            }
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+    localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+    sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+    window.location.href = 'index.html';
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Failed to upload document');
+        }
+    } catch (error) {
+        console.error('Error uploading EHR document:', error);
+        showError('Error uploading document. Please try again.');
+    } finally {
+        // Reset button state
+        const uploadBtn = form.querySelector('button[type="submit"]');
+        uploadBtn.innerHTML = '<i class="fas fa-upload"></i> Upload Document';
+        uploadBtn.disabled = false;
+    }
+}
+
+// Initialize AI calling functionality
+function initializeAICalling() {
+    // Setup modal close handlers
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('aiCallModal');
+        if (event.target === modal) {
+            closeAICallModal();
+        }
+    });
+}
+
+// Add to existing loadSectionData function
+function loadSectionData(sectionId) {
+    switch (sectionId) {
+        case 'overview':
+            loadOverviewData();
+            break;
+        case 'clinics':
+            loadClinicsData();
+            break;
+        case 'appointments':
+            loadAppointmentsData();
+            break;
+        case 'health-records':
+            if (isPatient()) {
+                initializeEHR();
+            }
+            break;
+        case 'ai-screening':
+            loadAIScreeningData();
+            break;
+        case 'reports':
+            loadReportsData();
+            break;
+        case 'profile':
+            loadProfileData();
+            break;
+        case 'patients':
+            loadPatientsData();
+            break;
+        case 'ai-reports':
+            loadAIReportsData();
+            break;
+        case 'ehr':
+            if (isDoctor()) {
+                loadAppointmentsWithEHR();
+            }
+            break;
+        case 'analytics':
+            loadAnalyticsData();
+            break;
+        case 'schedule':
+            loadScheduleData();
+            break;
+    }
+}
+
+// Check if user is patient
+function isPatient() {
+    const userData = localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user');
+    if (userData) {
+        const user = JSON.parse(userData);
+        return user.type === 'patient';
+    }
+    return false;
+}
+
+// Check if user is doctor
+function isDoctor() {
+    const userData = localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user');
+    if (userData) {
+        const user = JSON.parse(userData);
+        return user.type === 'doctor';
+    }
+    return false;
+}
+
+// ===== EHR Functions =====
+
+// Load EHR documents for patient
+async function loadEHRDocuments() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            console.error('No authentication token found');
+            return;
+        }
+        
+        const response = await fetch('/api/ehr/patient/documents', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            displayEHRDocuments(data.data.documents);
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        }
+    } catch (error) {
+        console.error('Error loading EHR documents:', error);
+    }
+}
+
+// Display EHR documents
+function displayEHRDocuments(documents) {
+    const container = document.getElementById('ehrDocumentsList');
+    if (!container) return;
+
+    if (documents.length === 0) {
+        container.innerHTML = '<p>No EHR documents uploaded yet.</p>';
+        return;
+    }
+
+    container.innerHTML = documents.map(doc => `
+        <div class="record-card ehr-document">
+            <div class="record-icon">
+                <i class="fas fa-file-pdf"></i>
+            </div>
+            <div class="record-info">
+                <h4>${doc.title}</h4>
+                <p>${doc.description || 'No description'}</p>
+                <span class="record-date">${new Date(doc.uploadDate).toLocaleDateString()}</span>
+                ${doc.appointment ? `<span class="appointment-link">Linked to appointment</span>` : ''}
+            </div>
+            <div class="record-actions">
+                <button class="btn btn-outline small" onclick="downloadEHRDocument('${doc.fileName}')">
+                    <i class="fas fa-download"></i> Download
+                </button>
+                <button class="btn btn-outline small danger" onclick="deleteEHRDocument('${doc._id}')">
+                    <i class="fas fa-trash"></i> Delete
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Upload EHR document
+async function uploadEHRDocument() {
+    const form = document.getElementById('ehrUploadForm');
+    const formData = new FormData(form);
+    
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            showError('Authentication required');
+            return;
+        }
+        
+        const response = await fetch('/api/ehr/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            showSuccess('EHR document uploaded successfully!');
+            form.reset();
+            document.getElementById('selectedFileName').style.display = 'none';
+            
+            // Refresh both Health Records and Reports sections
+            loadEHRDocuments(); // Refresh Health Records section
+            loadEHRDocumentsForReports(); // Refresh Reports section
+            
+            // Also refresh if we're currently in Reports section
+            const currentSection = document.querySelector('.dashboard-section.active');
+            if (currentSection && currentSection.id === 'reports') {
+                loadEHRDocumentsForReports();
+            }
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Failed to upload document');
+        }
+    } catch (error) {
+        console.error('Error uploading EHR document:', error);
+        showError('Error uploading document');
+    }
+}
+
+// Download EHR document (with token)
+async function downloadEHRDocument(filename) {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        if (!token) {
+            showError('Authentication required');
+            return;
+        }
+        const response = await fetch(`/api/ehr/download/${filename}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        if (!response.ok) {
+            showError('Failed to download document');
+            return;
+        }
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        showError('Error downloading document');
+    }
+}
+
+// Delete EHR document
+async function deleteEHRDocument(documentId) {
+    if (!confirm('Are you sure you want to delete this document?')) return;
+    
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            showError('Authentication required');
+            return;
+        }
+        
+        const response = await fetch(`/api/ehr/document/${documentId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            showSuccess('Document deleted successfully!');
+            loadEHRDocuments(); // Refresh Health Records section
+            loadEHRDocumentsForReports(); // Refresh Reports section
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        } else {
+            const error = await response.json();
+            showError(error.message || 'Failed to delete document');
+        }
+    } catch (error) {
+        console.error('Error deleting EHR document:', error);
+        showError('Error deleting document');
+    }
+}
+
+// Load appointments for EHR linking
+async function loadAppointmentsForEHR() {
+    try {
+        const userData = JSON.parse(localStorage.getItem('cliqpat_user') || sessionStorage.getItem('cliqpat_user'));
+        const token = userData?.token || localStorage.getItem('cliqpat_token') || sessionStorage.getItem('cliqpat_token');
+        
+        if (!token) {
+            console.error('No authentication token found');
+            return;
+        }
+        
+        const response = await fetch('/api/appointments/patient', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            populateAppointmentDropdown(data.data.appointments);
+        } else if (response.status === 401) {
+            // Token expired - clear storage and redirect
+            localStorage.removeItem('cliqpat_user');
+            localStorage.removeItem('cliqpat_token');
+            sessionStorage.removeItem('cliqpat_user');
+            sessionStorage.removeItem('cliqpat_token');
+            window.location.href = 'index.html';
+        }
+    } catch (error) {
+        console.error('Error loading appointments for EHR:', error);
+    }
+}
+
+// Populate appointment dropdown
+function populateAppointmentDropdown(appointments) {
+    const dropdown = document.getElementById('ehrAppointment');
+    if (!dropdown) return;
+
+    // Clear existing options
+    dropdown.innerHTML = '<option value="">Select Appointment (Optional)</option>';
+    
+    // Add appointment options
+    appointments.forEach(apt => {
+        if (apt.doctor && apt.doctor.firstName) {
+            const option = document.createElement('option');
+            option.value = apt._id;
+            option.textContent = `${apt.doctor.firstName} ${apt.doctor.lastName} - ${new Date(apt.appointmentDate).toLocaleDateString()} ${apt.appointmentTime}`;
+            dropdown.appendChild(option);
+        }
+    });
+}
+
+// Show category tabs
+function showCategory(category) {
+    // Remove active class from all tabs
+    document.querySelectorAll('.category-tab').forEach(tab => {
+        tab.classList.remove('active');
+    });
+    
+    // Add active class to clicked tab
+    event.target.classList.add('active');
+    
+    // Filter documents by category
+    const documents = document.querySelectorAll('.record-card');
+    documents.forEach(doc => {
+        if (category === 'all' || doc.dataset.category === category) {
+            doc.style.display = 'block';
+        } else {
+            doc.style.display = 'none';
+        }
+    });
+}
+
+// Format file size
+function formatFileSize(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// Show success message
+function showSuccess(message) {
+    // Create success notification
+    const notification = document.createElement('div');
+    notification.className = 'success-notification';
+    notification.textContent = message;
     notification.style.cssText = `
         position: fixed;
         top: 20px;
         right: 20px;
-        max-width: 400px;
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-left: 4px solid #22c55e;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        z-index: 1000;
-        padding: 20px;
-        animation: slideIn 0.3s ease-out;
+        background: #28a745;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        z-index: 10001;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
     `;
     
     document.body.appendChild(notification);
     
-    // Auto remove after 15 seconds if no action taken
+    // Remove after 3 seconds
     setTimeout(() => {
-        if (notification.parentElement) {
-            notification.remove();
-        }
-    }, 15000);
+        notification.remove();
+    }, 3000);
 }
 
-// Quick book appointment
-function quickBookAppointment(doctorId) {
-    showWeeklySlots(doctorId);
+// Show error message
+function showError(message) {
+    // Create error notification
+    const notification = document.createElement('div');
+    notification.className = 'error-notification';
+    notification.textContent = message;
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #dc3545;
+        color: white;
+        padding: 15px 20px;
+        border-radius: 5px;
+        z-index: 10001;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+        notification.remove();
+    }, 3000);
 }
 
-// Previous week navigation
-function previousWeek(doctorId) {
-    // Implementation for previous week
-    console.log('Previous week for doctor:', doctorId);
-    // In a real implementation, this would load the previous week's data
-}
-
-// Next week navigation
-function nextWeek(doctorId) {
-    // Implementation for next week
-    console.log('Next week for doctor:', doctorId);
-    // In a real implementation, this would load the next week's data
-}
-
-// Utility function to add one hour to time
+// Add missing utility functions
 function addOneHour(time) {
     const [hours, minutes] = time.split(':').map(Number);
     const newHours = (hours + 1) % 24;
     return `${newHours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
 }
 
-// Show success message
-function showSuccess(message) {
-    // Create or update success notification
-    showNotification(message, 'success');
-}
-
-// Show error message
-function showError(message) {
-    // Create or update error notification
-    showNotification(message, 'error');
-}
-
-// Show notification
-function showNotification(message, type = 'info') {
-    // Remove existing notifications
-    const existingNotifications = document.querySelectorAll('.notification');
-    existingNotifications.forEach(notification => notification.remove());
+// Show booking success with AI call option
+function showBookingSuccessWithAI(appointment, doctorId) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+    `;
     
-    // Create notification
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.innerHTML = `
-        <div class="notification-content">
-            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i>
-            <span>${message}</span>
-            <button class="notification-close" onclick="this.parentElement.parentElement.remove()">
-                <i class="fas fa-times"></i>
-            </button>
+    modal.innerHTML = `
+        <div style="background: white; padding: 30px; border-radius: 12px; text-align: center; max-width: 400px;">
+            <div style="color: #28a745; font-size: 48px; margin-bottom: 20px;">✅</div>
+            <h3 style="margin-bottom: 15px; color: #333;">Appointment Booked!</h3>
+            <p style="margin-bottom: 25px; color: #666;">Your appointment has been successfully scheduled.</p>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button onclick="this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #6c757d; color: white; border: none; border-radius: 5px; cursor: pointer;">Close</button>
+                <button onclick="initiateAICall('${doctorId}'); this.closest('.modal-overlay').remove()" style="padding: 10px 20px; background: #28a745; color: white; border: none; border-radius: 5px; cursor: pointer;">Call AI Doctor</button>
+            </div>
         </div>
     `;
     
-    document.body.appendChild(notification);
-    
-    // Auto remove after 5 seconds
-    setTimeout(() => {
-        if (notification.parentElement) {
-            notification.remove();
-        }
-    }, 5000);
+    modal.className = 'modal-overlay';
+    document.body.appendChild(modal);
 }
 
-// Logout function
-function logout() {
-    localStorage.removeItem('cliqpat_user');
-    sessionStorage.removeItem('cliqpat_user');
-    window.location.href = 'index.html';
-}
-
-// Additional functions that are called from HTML
-function searchClinics() {
-    console.log('Searching clinics...');
-    // Implementation for searching clinics
-}
-
-function showAppointmentTab(tab) {
-    console.log('Showing appointment tab:', tab);
-    const upcomingTab = document.getElementById('upcomingAppointments');
-    const pastTab = document.getElementById('pastAppointments');
-    const tabButtons = document.querySelectorAll('.tab-btn');
-    
-    // Remove active class from all tabs
-    tabButtons.forEach(btn => btn.classList.remove('active'));
-    
-    // Hide all tab content
-    if (upcomingTab) upcomingTab.style.display = 'none';
-    if (pastTab) pastTab.style.display = 'none';
-    
-    // Show selected tab and mark button as active
-    if (tab === 'upcoming' && upcomingTab) {
-        upcomingTab.style.display = 'block';
-        document.querySelector('.tab-btn').classList.add('active');
-    } else if (tab === 'past' && pastTab) {
-        pastTab.style.display = 'block';
-        document.querySelectorAll('.tab-btn')[1].classList.add('active');
-    }
-}
-
-function showCategory(category) {
-    console.log('Showing category:', category);
-    // Implementation for showing record categories
-    const tabs = document.querySelectorAll('.category-tab');
-    tabs.forEach(tab => tab.classList.remove('active'));
-    event.target.classList.add('active');
-}
-
-function scheduleScreening() {
-    console.log('Scheduling screening...');
-    // Implementation for scheduling screening
-    showSuccess('Screening scheduled successfully!');
-}
-
-function viewScreeningReport(id) {
-    console.log('Viewing screening report:', id);
-    // Implementation for viewing screening reports
-}
-
-function shareReport(id) {
-    console.log('Sharing report:', id);
-    // Implementation for sharing reports
-}
-
-// Make functions globally available
-window.searchClinics = searchClinics;
-window.showAppointmentTab = showAppointmentTab;
+// Global window assignments
+window.initiateAICall = initiateAICall;
+window.callDoctor = callDoctor;
+window.endDirectAICall = endDirectAICall;
+window.uploadEHRDocument = uploadEHRDocument;
+window.downloadEHRDocument = downloadEHRDocument;
+window.deleteEHRDocument = deleteEHRDocument;
 window.showCategory = showCategory;
-window.scheduleScreening = scheduleScreening;
-window.viewScreeningReport = viewScreeningReport;
-window.shareReport = shareReport;
+window.handleEHRFileSelect = handleEHRFileSelect;
+window.simulateAIResponse = simulateAIResponse;
+window.sendSimulatedMessage = sendSimulatedMessage;
+window.viewEHRDocument = viewEHRDocument;
+window.viewPatientEHR = viewPatientEHR;
+window.bookSlot = bookSlot;
 window.showWeeklySlots = showWeeklySlots;
 window.hideWeeklySlots = hideWeeklySlots;
-window.bookSlot = bookSlot;
 window.previousWeek = previousWeek;
 window.nextWeek = nextWeek;
-window.quickBookAppointment = quickBookAppointment;
-window.initiateAICall = initiateAICall;
+window.viewClinicDetails = viewClinicDetails;
+window.bookAppointment = bookAppointment;
 window.closeBookingModal = closeBookingModal;
 window.confirmBooking = confirmBooking;
-window.closeAICallModal = closeAICallModal;
-window.startAICall = startAICall;
-window.endAICall = endAICall;
-window.bookAppointmentFromAI = bookAppointmentFromAI;
-window.saveAIReport = saveAIReport;
-window.shareAIReport = shareAIReport;
 window.rescheduleAppointment = rescheduleAppointment;
+window.confirmReschedule = confirmReschedule;
 window.cancelAppointment = cancelAppointment;
 window.viewAppointmentDetails = viewAppointmentDetails;
 window.viewPrescription = viewPrescription;
 window.bookFollowUp = bookFollowUp;
+window.startConsultation = startConsultation;
 window.viewRecord = viewRecord;
 window.downloadRecord = downloadRecord;
+window.loadEHRDocumentsForReports = loadEHRDocumentsForReports;
+window.displayEHRDocumentsInReports = displayEHRDocumentsInReports;
 
-// Export functions for global use
-window.DashboardUtils = {
-    showSection,
-    loadSectionData,
-    rescheduleAppointment,
-    cancelAppointment,
-    viewAppointmentDetails,
-    bookAppointment,
-    logout
+// Logout function
+function logout() {
+    localStorage.removeItem('cliqpat_user');
+    localStorage.removeItem('cliqpat_token');
+    sessionStorage.removeItem('cliqpat_user');
+    sessionStorage.removeItem('cliqpat_token');
+    window.location.href = 'index.html';
+}
+
+// Add showEHRModal function
+window.showEHRModal = function(appointmentId) {
+    // Find the appointment from the last loaded list
+    const appointment = (window.lastDoctorAppointments || []).find(a => a._id === appointmentId);
+    if (!appointment || !appointment.ehrDocuments || appointment.ehrDocuments.length === 0) {
+        showError('No EHR documents found for this appointment');
+        return;
+    }
+    // Create modal
+    let modal = document.getElementById('ehrModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ehrModal';
+        modal.className = 'modal';
+        modal.innerHTML = `<div class='modal-content large'><div class='modal-header'><h3>EHR Documents</h3><button class='modal-close' onclick='closeEHRModal()'>&times;</button></div><div class='modal-body' id='ehrModalBody'></div></div>`;
+        document.body.appendChild(modal);
+    }
+    const body = modal.querySelector('#ehrModalBody');
+    body.innerHTML = appointment.ehrDocuments.map(doc => `
+        <div class='ehr-doc-item' style='display:flex;align-items:center;gap:16px;margin-bottom:16px;'>
+            <i class='fas fa-file-pdf' style='font-size:2rem;color:#e74c3c;'></i>
+            <div style='flex:1;'>
+                <div style='font-weight:600;'>${doc.originalName || doc.fileName}</div>
+                <div style='font-size:0.9rem;color:#888;'>Uploaded: ${doc.uploadDate ? new Date(doc.uploadDate).toLocaleDateString() : ''}</div>
+                <div style='font-size:0.9rem;color:#888;'>Size: ${formatFileSize(doc.fileSize)}</div>
+            </div>
+            <div style='display:flex;gap:8px;'>
+                <button class='btn btn-outline' onclick="viewEHRDocument('${doc.fileName}')"><i class='fas fa-eye'></i> View</button>
+                <button class='btn btn-outline' onclick="downloadEHRDocument('${doc.fileName}')"><i class='fas fa-download'></i> Download</button>
+            </div>
+        </div>
+    `).join('');
+    modal.style.display = 'block';
 };
-
+window.closeEHRModal = function() {
+    const modal = document.getElementById('ehrModal');
+    if (modal) modal.style.display = 'none';
+};
+// Store last loaded appointments for modal lookup
+window.lastDoctorAppointments = appointments;
